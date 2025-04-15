@@ -1,6 +1,8 @@
-use crate::{Data, Error, COMMAND_TARGET, ERROR_TARGET};
+use crate::{COMMAND_TARGET, CONSOLE_TARGET, Data, ERROR_TARGET, Error};
+use poise::{Context, FrameworkError};
 use std::path::Path;
-use tracing::{info, error};
+use std::time::Instant;
+use tracing::{error, info};
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::{
     EnvFilter,
@@ -8,8 +10,6 @@ use tracing_subscriber::{
     layer::SubscriberExt,
     util::SubscriberInitExt,
 };
-use poise::{Context, FrameworkError};
-use std::time::Instant;
 
 /// Log directory name
 pub const LOG_DIR: &str = "logs";
@@ -44,12 +44,11 @@ pub fn init() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Set up the subscriber with all layers
     // Use env filter to allow runtime configuration of log levels
     // Default to INFO level if not specified, but filter out serenity heartbeat logs
-    let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| {
-            EnvFilter::new("info")
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        EnvFilter::new("info")
             // Filter out serenity logs
             .add_directive("serenity=error".parse().unwrap())
-        });
+    });
 
     tracing_subscriber::registry()
         .with(env_filter)
@@ -166,11 +165,19 @@ pub fn log_command_error(error: &FrameworkError<'_, Data, Error>) {
         }
         err => {
             error!(
-                target: "",
+                target: ERROR_TARGET,
                 error_type = %std::any::type_name::<FrameworkError<'_, Data, Error>>(),
                 error = ?err,
                 "Other framework error"
             );
         }
     }
+}
+
+pub fn log_console(message: String) {
+    info!(
+        target: CONSOLE_TARGET,
+        message = %message,
+        event = "console",
+    );
 }
