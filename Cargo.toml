@@ -1,0 +1,19 @@
+[package]
+name = "bot-template-rs"
+version = "0.1.0"
+edition = "2024"
+
+
+[dependencies]
+dashmap = "5.5.3"
+serenity = "0.12.4"
+poise = "0.6.1"
+tokio = { version = "1.44.2", features = ["rt-multi-thread", "fs", "signal"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+
+# Logging and tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-appender = "0.2"
+chrono = { version = "0.4", features = ["serde"] }
