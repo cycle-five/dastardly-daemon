@@ -1,5 +1,6 @@
 mod commands;
 mod data;
+mod handlers;
 mod logging;
 
 use std::env;
@@ -56,11 +57,13 @@ async fn async_main() -> Result<(), Error> {
             },
             ..Default::default()
         })
-        .setup(|ctx, ready, framework| {
+        .setup(|ctx, _ready, framework| {
             Box::pin(async move {
-                logging::log_console(format!("{} is ready!", ready.user.name));
-                // Register the bot's data
+                logging::log_console(
+                    "Registering commands and return data, this will go away in the next version of poise".to_string()
+                );
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
+                // Register the bot's data
                 Ok(data)
             })
         })
@@ -69,6 +72,7 @@ async fn async_main() -> Result<(), Error> {
     // Configure the Serenity client
     let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
     let mut client = serenity::ClientBuilder::new(token, intents)
+        .event_handler(handlers::Handler)
         .framework(framework)
         .await
         .expect("Failed to create client");
