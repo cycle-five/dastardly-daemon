@@ -1,11 +1,12 @@
-use crate::{COMMAND_TARGET, CONSOLE_TARGET, Data, ERROR_TARGET, Error};
+use crate::{COMMAND_TARGET, CONSOLE_TARGET, ERROR_TARGET, EVENT_TARGET};
+use crate::{Data, Error};
 use poise::{Context, FrameworkError};
 use std::path::Path;
 use std::time::Instant;
 use tracing::{error, info};
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::{
-    EnvFilter,
+    EnvFilter, Layer,
     fmt::{self, format::FmtSpan},
     layer::SubscriberExt,
     util::SubscriberInitExt,
@@ -15,6 +16,8 @@ use tracing_subscriber::{
 pub const LOG_DIR: &str = "logs";
 /// Command log file name
 pub const COMMAND_LOG_FILE: &str = "commands";
+/// Event log file name
+pub const EVENTS_LOG_FILE: &str = "events";
 /// You might add other log files here...
 
 /// Initialize the logging system with console and file outputs
@@ -26,6 +29,10 @@ pub fn init() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     // Set up file appenders with daily rotation
     let command_file = RollingFileAppender::new(Rotation::DAILY, LOG_DIR, COMMAND_LOG_FILE);
+    let event_file = RollingFileAppender::new(Rotation::DAILY, LOG_DIR, EVENTS_LOG_FILE);
+
+    let command_filter = EnvFilter::new(format!("{}=info", COMMAND_TARGET));
+    let event_filter = EnvFilter::new(format!("{}=info", EVENT_TARGET));
 
     // Create a layer for console output (human-readable format)
     let console_layer = fmt::layer()
@@ -39,7 +46,16 @@ pub fn init() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .with_target(true)
         .with_ansi(false)
         .json()
-        .with_writer(command_file);
+        .with_writer(command_file)
+        .with_filter(command_filter);
+
+    // Create a layer for logs from events
+    let event_layer = fmt::layer()
+        .with_span_events(FmtSpan::CLOSE)
+        .with_target(true)
+        .with_ansi(false)
+        .with_writer(event_file)
+        .with_filter(event_filter);
 
     // Set up the subscriber with all layers
     // Use env filter to allow runtime configuration of log levels
@@ -54,13 +70,14 @@ pub fn init() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .with(env_filter)
         .with(console_layer)
         .with(command_layer)
+        .with(event_layer)
         .init();
 
     info!("Logging system initialized");
     Ok(())
 }
 
-// Store command start time in the context data
+// Store command start time in a thread-local variable
 thread_local! {
     static COMMAND_START_TIME: std::cell::RefCell<Option<Instant>> = const { std::cell::RefCell::new(None) };
 }

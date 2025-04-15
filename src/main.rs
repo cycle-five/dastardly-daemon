@@ -13,6 +13,7 @@ use tracing::info;
 pub const BOT_NAME: &str = "bot_template_rs";
 pub const COMMAND_TARGET: &str = "bot_template_rs::command";
 pub const ERROR_TARGET: &str = "bot_template_rs::error";
+pub const EVENT_TARGET: &str = "bot_template_rs::handlers";
 pub const CONSOLE_TARGET: &str = "bot_template_rs";
 pub use data::Data;
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
