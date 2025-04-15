@@ -1,17 +1,24 @@
-use poise::serenity_prelude::{self as serenity, EventHandler, Context, Ready, GuildId};
-use tracing::info;
+use poise::serenity_prelude::{self as serenity, Context, EventHandler, GuildId, Ready};
+use tracing::{info, warn};
 
 pub struct Handler;
 
 #[serenity::async_trait]
 impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, ready: Ready) {
-        info!("Connected as {}, shard {}", ready.user.name, ctx.shard_id);
+        let user_name = ready.user.name.clone();
+        let shard_id = ctx.shard_id;
+        info!("Connected as {user_name}, shard {shard_id}");
     }
 
     async fn cache_ready(&self, ctx: Context, guilds: Vec<GuildId>) {
         let guild_count_cache = ctx.cache.guild_count();
         let guild_count = guilds.len();
-        info!("Cache ready! The bot is in {} guild(s), ready event contains {} guilds.!", guild_count_cache, guild_count);
+        if guild_count != guild_count_cache {
+            warn!(
+                "Cache guild count mismatch: {guild_count_cache} (cache) vs {guild_count} (actual)"
+            );
+        }
+        info!("Cache ready! The bot is in {guild_count} guild(s)");
     }
 }
