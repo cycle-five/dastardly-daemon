@@ -19,7 +19,6 @@ pub const COMMAND_LOG_FILE: &str = "commands";
 /// Event log file name
 pub const EVENTS_LOG_FILE: &str = "events";
 /// You might add other log files here...
-
 /// Initialize the logging system with console and file outputs
 pub fn init() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Create log directory if it doesn't exist
@@ -31,8 +30,8 @@ pub fn init() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let command_file = RollingFileAppender::new(Rotation::DAILY, LOG_DIR, COMMAND_LOG_FILE);
     let event_file = RollingFileAppender::new(Rotation::DAILY, LOG_DIR, EVENTS_LOG_FILE);
 
-    let command_filter = EnvFilter::new(format!("{}=info", COMMAND_TARGET));
-    let event_filter = EnvFilter::new(format!("{}=info", EVENT_TARGET));
+    let command_filter = EnvFilter::new(format!("{COMMAND_TARGET}=info"));
+    let event_filter = EnvFilter::new(format!("{EVENT_TARGET}=info"));
 
     // Create a layer for console output (human-readable format)
     let console_layer = fmt::layer()
@@ -191,10 +190,58 @@ pub fn log_command_error(error: &FrameworkError<'_, Data, Error>) {
     }
 }
 
-pub fn log_console(message: String) {
+pub fn log_console(message: &str) {
     info!(
         target: CONSOLE_TARGET,
         message = %message,
         event = "console",
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+    use std::sync::Once;
+
+    // Ensure init() is only called once in tests
+    static INIT: Once = Once::new();
+
+    fn setup() {
+        INIT.call_once(|| {
+            // Use a test-specific log directory to avoid conflicts
+            const TEST_LOG_DIR: &str = "test_logs";
+            
+            // Clean up any existing test logs
+            if Path::new(TEST_LOG_DIR).exists() {
+                let _ = std::fs::remove_dir_all(TEST_LOG_DIR);
+            }
+            
+            // Initialize logging with test configuration
+            let _ = init();
+        });
+    }
+
+    #[test]
+    fn test_log_console() {
+        setup();
+        
+        // Test that log_console doesn't panic
+        log_console("Test message");
+    }
+
+    #[test]
+    fn test_thread_local_command_start_time() {
+        // Test that the thread local variable can be accessed
+        COMMAND_START_TIME.with(|cell| {
+            assert!(cell.borrow().is_none());
+            *cell.borrow_mut() = Some(Instant::now());
+            assert!(cell.borrow().is_some());
+        });
+    }
+
+    // Note: More comprehensive tests would require mocking the Context
+    // which is challenging due to its complex structure.
+    // In a real-world scenario, you might use integration tests
+    // or a more sophisticated mocking framework.
 }

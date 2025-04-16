@@ -27,8 +27,10 @@ async fn async_main() -> Result<(), Error> {
     // Load environment variables
     let token = env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN must be set");
 
-    // Set up the bot's data
-    let data = Data::new();
+    // Load the bot's data from file
+    info!("Loading bot data...");
+    let data = Data::load().await;
+    let data_clone = data.clone();
 
     // Configure the Poise framework
     let framework = poise::Framework::builder()
@@ -61,7 +63,7 @@ async fn async_main() -> Result<(), Error> {
         .setup(|ctx, _ready, framework| {
             Box::pin(async move {
                 logging::log_console(
-                    "Registering commands and return data, this will go away in the next version of poise".to_string()
+                    "Registering commands and return data, this will go away in the next version of poise"
                 );
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
                 // Register the bot's data
@@ -79,11 +81,29 @@ async fn async_main() -> Result<(), Error> {
         .expect("Failed to create client");
 
     info!("Starting bot...");
-    // Start the bot
-    if let Err(err) = client.start().await {
-        eprintln!("Error starting the bot: {}", err);
+    
+    // Set up a Ctrl+C handler to gracefully shut down
+    let client_handle = client.start();
+    
+    // Wait for Ctrl+C or other termination signal
+    tokio::select! {
+        result = client_handle => {
+            if let Err(err) = result {
+                eprintln!("Error running the bot: {err}");
+            }
+        }
+        _ = tokio::signal::ctrl_c() => {
+            info!("Received Ctrl+C, shutting down...");
+        }
     }
-
+    
+    // Save data before shutting down
+    info!("Saving bot data...");
+    if let Err(err) = data_clone.save().await {
+        eprintln!("Error saving bot data: {err}");
+    }
+    
+    info!("Bot shutdown complete");
     Ok(())
 }
 
@@ -97,6 +117,6 @@ fn main() {
 
     // Handle any errors that occurred during execution
     if let Err(err) = result {
-        eprintln!("Error: {}", err);
+        eprintln!("Error: {err}");
     }
 }

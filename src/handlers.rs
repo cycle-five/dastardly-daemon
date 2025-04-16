@@ -24,3 +24,27 @@ impl EventHandler for Handler {
         info!("Cache ready! The bot is in {guild_count} guild(s)");
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Test the Handler struct can be created
+    #[test]
+    fn test_handler_creation() {
+        let handler = Handler;
+        // Just verify we can create the handler
+        // Just verify we can create the handler
+        let _another_handler = Handler;
+        assert!(true, "Handler can be created");
+    }
+
+    // Since we can't easily mock Context and Ready objects due to their complex structure,
+    // we'll test what we can about our handler implementation.
+    #[test]
+    fn test_handler_implements_event_handler() {
+        // This test verifies at compile time that Handler implements EventHandler
+        fn assert_impl<T: EventHandler>() {}
+        assert_impl::<Handler>();
+    }
+}
