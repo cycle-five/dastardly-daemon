@@ -1,4 +1,7 @@
-use std::{ops::Deref, sync::Arc};
+use std::{
+    ops::{Deref, DerefMut},
+    sync::Arc,
+};
 
 use crate::enforcement::EnforcementCheckRequest;
 use dashmap::DashMap;
@@ -70,8 +73,9 @@ pub struct PendingEnforcement {
     pub executed: bool,
 }
 
+/// Centralized data structure for the bot
 #[derive(Clone)]
-pub struct Data(pub DataInner);
+pub struct Data(pub Arc<DataInner>);
 
 impl Data {
     /// Get the guild configuration for a specific guild
@@ -98,20 +102,27 @@ impl Deref for Data {
     }
 }
 
+impl DerefMut for Data {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        Arc::make_mut(&mut self.0)
+    }
+}
+
 impl Data {
     /// Create a new Data instance
     #[must_use]
     pub fn new() -> Self {
-        Self(DataInner::new())
+        Self(DataInner::new().into())
     }
 
+    /// Set the enforcement task sender
     pub fn set_enforcement_tx(&mut self, tx: Sender<EnforcementCheckRequest>) {
-        self.0.set_enforcement_tx(tx);
+        Arc::make_mut(&mut self.0).enforcement_tx = Arc::new(Some(tx));
     }
 
     /// Load data from YAML file
     pub async fn load() -> Self {
-        Self(DataInner::load().await)
+        Self(Arc::new(DataInner::load().await))
     }
 
     /// Save data to YAML file
@@ -124,6 +135,7 @@ impl Data {
         self.0.save().await
     }
 
+    /// Get the enforcement task sender
     #[must_use]
     pub fn get_warnings(&self) -> Vec<Warning> {
         self.0
@@ -133,6 +145,7 @@ impl Data {
             .collect()
     }
 
+    /// Get the pending enforcement actions
     #[must_use]
     pub fn get_pending_enforcements(&self) -> Vec<PendingEnforcement> {
         self.0
@@ -142,6 +155,7 @@ impl Data {
             .collect()
     }
 
+    /// Get a specific warning by ID
     #[must_use]
     pub fn get_warning(&self, id: &str) -> Option<Warning> {
         self.0.warnings.get(id).map(|entry| entry.value().clone())
@@ -203,11 +217,6 @@ impl DataInner {
             pending_enforcements: DashMap::new(),
             enforcement_tx: Arc::new(None),
         }
-    }
-
-    /// Set the enforcement task sender
-    pub fn set_enforcement_tx(&mut self, tx: Sender<EnforcementCheckRequest>) {
-        self.enforcement_tx = Arc::new(Some(tx));
     }
 
     /// Load data from YAML file
