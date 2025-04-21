@@ -12,17 +12,6 @@ pub async fn ping(ctx: Context<'_, Data, Error>) -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use poise::serenity_prelude::{self as serenity, ChannelId, GuildId, MessageId, UserId};
-    use std::sync::Arc;
-
-    // Helper function to create a test context
-    // Note: This is a simplified mock that doesn't actually work for running commands
-    // but is sufficient for compile-time testing
-    fn create_test_context() -> Context<'static, Data, Error> {
-        // This is just a placeholder to make the compiler happy
-        // In a real test, you would use a proper mocking framework
-        unsafe { std::mem::zeroed() }
-    }
 
     // Test that the ping command is properly defined
     #[test]
