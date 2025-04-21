@@ -2,6 +2,7 @@ mod commands;
 mod data;
 mod handlers;
 mod logging;
+mod enforcement;
 
 use std::env;
 
@@ -10,11 +11,11 @@ use serenity::GatewayIntents;
 use tracing::info;
 
 // Customize these constants for your bot
-pub const BOT_NAME: &str = "bot_template_rs";
-pub const COMMAND_TARGET: &str = "bot_template_rs::command";
-pub const ERROR_TARGET: &str = "bot_template_rs::error";
-pub const EVENT_TARGET: &str = "bot_template_rs::handlers";
-pub const CONSOLE_TARGET: &str = "bot_template_rs";
+pub const BOT_NAME: &str = "simp_sniper_rs";
+pub const COMMAND_TARGET: &str = "simp_sniper_rs::command";
+pub const ERROR_TARGET: &str = "simp_sniper_rs::error";
+pub const EVENT_TARGET: &str = "simp_sniper_rs::handlers";
+pub const CONSOLE_TARGET: &str = "simp_sniper_rs";
 pub use data::Data;
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
@@ -68,13 +69,13 @@ async fn async_main() -> Result<(), Error> {
                 );
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
                 // Register the bot's data
-                Ok(data)
+                Ok(data_clone)
             })
         })
         .build();
 
     // Configure the Serenity client
-    let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
+    let intents = GatewayIntents::non_privileged() | GatewayIntents::GUILD_MODERATION;
     let mut client = serenity::ClientBuilder::new(token, intents)
         .event_handler(handlers::Handler)
         .framework(framework)
@@ -82,7 +83,21 @@ async fn async_main() -> Result<(), Error> {
         .expect("Failed to create client");
 
     info!("Starting bot...");
-
+    
+    // Spawn background task to check enforcements
+    let data_for_task = data.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(60)); // Check every minute
+        loop {
+            interval.tick().await;
+            
+            // Check for enforcements that need to be executed
+            if let Err(e) = enforcement::check_and_execute_enforcements(&data_for_task).await {
+                tracing::error!("Error in enforcement task: {}", e);
+            }
+        }
+    });
+    
     let client_handle = client.start();
 
     // Wait for Ctrl+C or other termination signal
@@ -99,7 +114,7 @@ async fn async_main() -> Result<(), Error> {
 
     // Save data before shutting down
     info!("Saving bot data...");
-    if let Err(err) = data_clone.save().await {
+    if let Err(err) = data.save().await {
         eprintln!("Error saving bot data: {err}");
     }
 

@@ -17,7 +17,7 @@ pub async fn ping(ctx: Context<'_, Data, Error>) -> Result<(), Error> {
 }
 
 /// Warn a user for inappropriate behavior
-#[command(prefix_command, slash_command, guild_only, check = "admin_check")]
+#[command(prefix_command, slash_command, required_permissions = "ADMINISTRATOR")]
 pub async fn warn(
     ctx: Context<'_, Data, Error>,
     #[description = "User to warn"] user: User,
@@ -164,7 +164,7 @@ pub async fn warn(
 }
 
 /// Cancel a pending enforcement action
-#[command(prefix_command, slash_command, guild_only, check = "admin_check")]
+#[command(prefix_command, slash_command, guild_only, required_permissions= "ADMINISTRATOR")]
 pub async fn cancelwarning(
     ctx: Context<'_, Data, Error>,
     #[description = "User whose enforcement to cancel"] user: User,
@@ -220,21 +220,27 @@ pub async fn cancelwarning(
     Ok(())
 }
 
-// Admin check function for commands that require admin permissions
-async fn admin_check(ctx: Context<'_, Data, Error>) -> Result<bool, Error> {
-    let guild = ctx
-        .guild()
-        .ok_or("This command must be used in a guild")?
-        .clone();
-    if let Some(member) = ctx.author_member().await {
-        #[allow(deprecated)]
-        let permissions = guild.member_permissions(&member);
-        return Ok(permissions.administrator() || permissions.manage_guild());
-    }
-    ctx.say("This command can only be used by administrators")
-        .await?;
-    Ok(false)
-}
+// // Admin check function for commands that require admin permissions
+// async fn admin_check(ctx: Context<'_, Data, Error>) -> Result<bool, Error> {
+//     // let guild = match ctx
+//     //     .guild() {
+//     //     Some(guild) => guild,
+//     //     None => {
+//     //         ctx.say("This command can only be used in a server").await?;
+//     //         return Ok(false);
+//     //     }
+//     // }.clone();
+
+//     if let Some(member) = ctx.author_member().await {
+//         #[allow(deprecated)]
+//         //let permissions = guild.member_permissions(&member);
+//         let permissions = member.permissions(ctx)?;
+//         return Ok(permissions.administrator() || permissions.manage_guild());
+//     }
+//     ctx.say("This command can only be used by administrators")
+//         .await?;
+//     Ok(false)
+// }
 
 #[cfg(test)]
 mod tests {
