@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{ops::Deref, sync::Arc};
 
 use crate::enforcement::EnforcementCheckRequest;
 use dashmap::DashMap;
@@ -70,9 +70,87 @@ pub struct PendingEnforcement {
     pub executed: bool,
 }
 
+#[derive(Clone)]
+pub struct Data(pub DataInner);
+
+impl Data {
+    /// Get the guild configuration for a specific guild
+    #[must_use]
+    pub fn get_guild_config(&self, guild_id: serenity::GuildId) -> Option<GuildConfig> {
+        self.0
+            .guild_configs
+            .get(&guild_id)
+            .map(|entry| entry.value().clone())
+    }
+
+    /// Get the cache
+    #[must_use]
+    pub fn get_cache(&self) -> Arc<serenity::Cache> {
+        Arc::clone(&self.0.cache)
+    }
+}
+
+impl Deref for Data {
+    type Target = DataInner;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Data {
+    /// Create a new Data instance
+    #[must_use]
+    pub fn new() -> Self {
+        Self(DataInner::new())
+    }
+
+    pub fn set_enforcement_tx(&mut self, tx: Sender<EnforcementCheckRequest>) {
+        self.0.set_enforcement_tx(tx);
+    }
+
+    /// Load data from YAML file
+    pub async fn load() -> Self {
+        Self(DataInner::load().await)
+    }
+
+    /// Save data to YAML file
+    /// # Errors
+    /// This function will return an error if:
+    /// - The config directory cannot be created
+    /// - The guild configurations cannot be serialized to YAML
+    /// - The YAML data cannot be written to the config file
+    pub async fn save(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self.0.save().await
+    }
+
+    #[must_use]
+    pub fn get_warnings(&self) -> Vec<Warning> {
+        self.0
+            .warnings
+            .iter()
+            .map(|entry| entry.value().clone())
+            .collect()
+    }
+
+    #[must_use]
+    pub fn get_pending_enforcements(&self) -> Vec<PendingEnforcement> {
+        self.0
+            .pending_enforcements
+            .iter()
+            .map(|entry| entry.value().clone())
+            .collect()
+    }
+
+    #[must_use]
+    pub fn get_warning(&self, id: &str) -> Option<Warning> {
+        self.0.warnings.get(id).map(|entry| entry.value().clone())
+    }
+}
+
 /// Main centralized data structure for the bot
 #[derive(Clone)]
-pub struct Data {
+pub struct DataInner {
     // Map of guild_id -> guild configuration
     pub guild_configs: DashMap<serenity::GuildId, GuildConfig>,
     // Cache from the bot's context
@@ -108,7 +186,13 @@ impl std::fmt::Debug for Data {
     }
 }
 
-impl Data {
+impl Default for DataInner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl DataInner {
     // Create a new Data instance
     #[must_use]
     pub fn new() -> Self {
@@ -273,7 +357,9 @@ mod tests {
             guild_id: 12345,
             music_channel_id: Some(67890),
             default_notification_method: NotificationMethod::DirectMessage,
-            default_enforcement: Some(EnforcementAction::Mute { duration: Some(3600) }),
+            default_enforcement: Some(EnforcementAction::Mute {
+                duration: Some(3600),
+            }),
         };
 
         // Test serialization
@@ -341,7 +427,9 @@ mod tests {
             warning_id: "warn-id".to_string(),
             user_id: 12345,
             guild_id: 11111,
-            action: EnforcementAction::Ban { duration: Some(604800) },
+            action: EnforcementAction::Ban {
+                duration: Some(604800),
+            },
             execute_at: "2023-01-02T00:00:00Z".to_string(),
             executed: false,
         };

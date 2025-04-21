@@ -19,8 +19,35 @@ pub enum EnforcementCheckRequest {
     Shutdown,
 }
 
+/// Create a channel and return the sender
+pub fn create_enforcement_channel() -> Sender<EnforcementCheckRequest> {
+    let (tx, rx) = mpsc::channel::<EnforcementCheckRequest>(100);
+    let tx_clone = tx.clone();
+
+    // Store receiver in a static variable or return it
+    ENFORCEMENT_RECEIVER.with(|cell| {
+        *cell.borrow_mut() = Some(rx);
+    });
+
+    tx_clone
+}
+
+/// Start the enforcement task with a provided receiver
+pub fn start_task_with_receiver(
+    http: Arc<Http>,
+    data: Data,
+    rx: Receiver<EnforcementCheckRequest>,
+    check_interval_seconds: u64,
+) {
+    // Spawn the task
+    tokio::spawn(async move {
+        enforcement_task(http, data, rx, check_interval_seconds).await;
+    });
+}
+
 /// Start the enforcement task and return a sender to communicate with it
-pub fn start_enforcement_task(
+/// This is kept for backward compatibility
+pub fn _start_enforcement_task(
     http: Arc<Http>,
     data: Data,
     check_interval_seconds: u64,
@@ -35,6 +62,16 @@ pub fn start_enforcement_task(
     });
 
     tx_clone
+}
+
+// Thread-local storage for the enforcement receiver
+thread_local! {
+    static ENFORCEMENT_RECEIVER: std::cell::RefCell<Option<Receiver<EnforcementCheckRequest>>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Get the enforcement receiver if available
+pub fn take_enforcement_receiver() -> Option<Receiver<EnforcementCheckRequest>> {
+    ENFORCEMENT_RECEIVER.with(|cell| cell.borrow_mut().take())
 }
 
 /// The main enforcement task that periodically checks for enforcement actions
@@ -60,19 +97,19 @@ async fn enforcement_task(
                     EnforcementCheckRequest::CheckAll => {
                         info!("Received request to check all enforcements");
                         if let Err(e) = check_all_enforcements(&http, &data).await {
-                            error!("Error checking all enforcements: {}", e);
+                            error!("Error checking all enforcements: {e}");
                         }
                     },
                     EnforcementCheckRequest::CheckUser { user_id, guild_id } => {
                         info!("Received request to check enforcements for user {} in guild {}", user_id, guild_id);
                         if let Err(e) = check_user_enforcements(&http, &data, user_id, guild_id).await {
-                            error!("Error checking user enforcements: {}", e);
+                            error!("Error checking user enforcements: {e}");
                         }
                     },
                     EnforcementCheckRequest::CheckEnforcement { enforcement_id } => {
                         info!("Received request to check enforcement {}", enforcement_id);
                         if let Err(e) = check_specific_enforcement(&http, &data, &enforcement_id).await {
-                            error!("Error checking specific enforcement: {}", e);
+                            error!("Error checking specific enforcement: {e}");
                         }
                     },
                     EnforcementCheckRequest::Shutdown => {
@@ -207,14 +244,12 @@ async fn execute_enforcement(http: &Http, data: &Data, enforcement_id: &str) -> 
                 match pending.executed {
                     false => {
                         // Apply mute (timeout)
-                        info!(
-                            "Muting user {user_id} in guild {guild_id} for {duration:?} seconds"
-                        );
+                        info!("Muting user {user_id} in guild {guild_id} for {duration:?} seconds");
                         if let Ok(guild) = guild_id.to_partial_guild(http).await {
                             if let Ok(mut member) = guild.member(http, user_id).await {
                                 #[allow(clippy::cast_possible_wrap)]
-                                let timeout_until =
-                                    Utc::now() + chrono::Duration::seconds(duration.unwrap_or(0) as i64);
+                                let timeout_until = Utc::now()
+                                    + chrono::Duration::seconds(duration.unwrap_or(0) as i64);
                                 if let Err(e) = member
                                     .disable_communication_until_datetime(
                                         http,

@@ -26,7 +26,9 @@ pub async fn warn(
     #[description = "Reason for warning"] reason: String,
     #[description = "Notification method (DM or Public)"] notification: Option<String>,
     #[description = "Action to take (mute, ban, kick)"] action: Option<String>,
-    #[description = "Duration in minutes for mute/ban, delay for kick"] duration_minutes: Option<u64>,
+    #[description = "Duration in minutes for mute/ban, delay for kick"] duration_minutes: Option<
+        u64,
+    >,
 ) -> Result<(), Error> {
     ctx.defer().await?;
     let guild_id = ctx
@@ -52,15 +54,9 @@ pub async fn warn(
     // Determine enforcement action
     let duration = duration_minutes.map(|d| d * 60);
     let enforcement = match action.as_deref() {
-        Some("mute" | "Mute") => Some(EnforcementAction::Mute {
-            duration,
-        }),
-        Some("ban" | "Ban") => Some(EnforcementAction::Ban {
-            duration
-        }),
-        Some("kick" | "Kick") => Some(EnforcementAction::Kick {
-            delay: duration,
-        }),
+        Some("mute" | "Mute") => Some(EnforcementAction::Mute { duration }),
+        Some("ban" | "Ban") => Some(EnforcementAction::Ban { duration }),
+        Some("kick" | "Kick") => Some(EnforcementAction::Kick { delay: duration }),
         _ => guild_config.default_enforcement,
     };
 
@@ -113,7 +109,10 @@ pub async fn warn(
         ctx.data()
             .pending_enforcements
             .insert(enforcement_id, pending);
-        info!("Pending enforcements: {:?}", ctx.data().pending_enforcements);
+        info!(
+            "Pending enforcements: {:?}",
+            ctx.data().pending_enforcements
+        );
     }
 
     // Notify user based on notification method
@@ -191,15 +190,19 @@ pub async fn warn(
             enforcement_action = ?action,
             "Immediate enforcement action detected"
         );
-        
+
         // Check if this is an immediate action
         let is_immediate = match action {
             EnforcementAction::Kick { delay } => delay.is_none() || delay.is_some_and(|d| d == 0),
-            EnforcementAction::Mute { duration } => duration.is_none() || duration.is_some_and(|d| d == 0),
-            EnforcementAction::Ban { duration } => duration.is_none() || duration.is_some_and(|d| d == 0),
+            EnforcementAction::Mute { duration } => {
+                duration.is_none() || duration.is_some_and(|d| d == 0)
+            }
+            EnforcementAction::Ban { duration } => {
+                duration.is_none() || duration.is_some_and(|d| d == 0)
+            }
             EnforcementAction::None => false,
         };
-        
+
         if is_immediate {
             info!(
                 target: crate::COMMAND_TARGET,

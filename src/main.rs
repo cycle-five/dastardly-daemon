@@ -8,7 +8,7 @@ use std::env;
 
 use poise::serenity_prelude::{self as serenity};
 use serenity::GatewayIntents;
-use tracing::info;
+use tracing::{error, info};
 
 // Customize these constants for your bot
 pub const BOT_NAME: &str = "simp_sniper_rs";
@@ -16,7 +16,7 @@ pub const COMMAND_TARGET: &str = "simp_sniper_rs::command";
 pub const ERROR_TARGET: &str = "simp_sniper_rs::error";
 pub const EVENT_TARGET: &str = "simp_sniper_rs::handlers";
 pub const CONSOLE_TARGET: &str = "simp_sniper_rs";
-pub use data::Data;
+pub use data::{Data, DataInner};
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
 
@@ -32,18 +32,29 @@ async fn async_main() -> Result<(), Error> {
     info!("Loading bot data...");
     let mut data = Data::load().await;
 
-    // Start the enforcement task with a 60-second check interval
-    info!("Starting enforcement task...");
-    let enforcement_tx = enforcement::start_enforcement_task(
-        serenity::Http::new(&token).into(),
-        data.clone(),
-        60, // Check interval in seconds
-    );
-    
-    // Set the enforcement sender in the data
+    // Create enforcement channel first
+    info!("Creating enforcement channel...");
+    let enforcement_tx = enforcement::create_enforcement_channel();
+
+    // Set the enforcement sender in data BEFORE wrapping in Arc
     data.set_enforcement_tx(enforcement_tx);
 
-    let data_clone = data.clone();
+    // Now wrap the data in Arc for thread-safe sharing
+    // let data = Arc::new(data);
+    let data_cloned = data.clone();
+
+    // Start the enforcement task with the receiver
+    if let Some(rx) = enforcement::take_enforcement_receiver() {
+        info!("Starting enforcement task...");
+        enforcement::start_task_with_receiver(
+            serenity::Http::new(&token).into(),
+            data_cloned.clone(),
+            rx,
+            60, // Check interval in seconds
+        );
+    } else {
+        error!("Failed to get enforcement receiver");
+    }
 
     // Configure the Poise framework
     let framework = poise::Framework::builder()
@@ -80,8 +91,8 @@ async fn async_main() -> Result<(), Error> {
                     "Registering commands and return data, this will go away in the next version of poise"
                 );
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-                // Register the bot's data
-                Ok(data_clone)
+                // Register the bot's data - clone from the Arc
+                Ok(data_cloned.clone())
             })
         })
         .build();
@@ -96,7 +107,7 @@ async fn async_main() -> Result<(), Error> {
 
     info!("Starting bot...");
 
-    // Insert bot data into client (for event handlers)
+    // Insert bot data into client (for event handlers) - clone from the Arc
     {
         let mut client_data = client.data.write().await;
         client_data.insert::<Data>(data.clone());
