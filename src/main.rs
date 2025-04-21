@@ -38,7 +38,8 @@ async fn async_main() -> Result<(), Error> {
             commands: vec![
                 // Register commands from commands module
                 commands::ping(),
-                // Add more commands here as needed
+                commands::warn(),
+                commands::cancelwarning(),
             ],
             pre_command: |ctx| {
                 Box::pin(async move {
