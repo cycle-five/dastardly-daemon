@@ -2,8 +2,6 @@ use std::sync::Arc;
 
 use poise::serenity_prelude as serenity;
 use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc, Duration};
-use uuid::Uuid;
 use dashmap::DashMap;
 
 /// Guild configuration structure.

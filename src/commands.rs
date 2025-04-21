@@ -1,6 +1,6 @@
-use crate::{Data, Error, NotificationMethod, EnforcementAction, Warning, PendingEnforcement};
+use crate::{Data, Error, data::{NotificationMethod, EnforcementAction, Warning, PendingEnforcement, GuildConfig}};
 use poise::{Context, command};
-use poise::serenity_prelude::{User, GuildId, CreateMessage, CreateEmbed, Colour, Timestamp};
+use poise::serenity_prelude::{User, Mentionable, CreateMessage, CreateEmbed, Colour, Timestamp};
 use uuid::Uuid;
 use chrono::{Utc, Duration};
 use tracing::{info, error};
@@ -189,12 +189,11 @@ pub async fn cancelwarning(
 
 // Admin check function for commands that require admin permissions
 async fn admin_check(ctx: Context<'_, Data, Error>) -> Result<bool, Error> {
-    if let Some(guild_id) = ctx.guild_id() {
-        if let Some(member) = ctx.author_member().await {
-            if let Ok(permissions) = member.permissions(&ctx) {
-                return Ok(permissions.administrator() || permissions.manage_guild());
-            }
-        }
+    let guild = ctx.guild().ok_or("This command must be used in a guild")?.clone();
+    if let Some(member) = ctx.author_member().await {
+        #[allow(deprecated)]
+        let permissions = guild.member_permissions(&member);
+        return Ok(permissions.administrator() || permissions.manage_guild());
     }
     ctx.say("This command can only be used by administrators").await?;
     Ok(false)
