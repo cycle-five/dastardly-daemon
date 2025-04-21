@@ -84,10 +84,21 @@ async fn async_main() -> Result<(), Error> {
 
     info!("Starting bot...");
     
-    // Insert bot data into client
+    // Start the enforcement task with a 60-second check interval
+    let enforcement_tx = enforcement::start_enforcement_task(
+        client.http.clone(),
+        data.clone(),
+        60 // Check interval in seconds
+    );
+    
+    // Add enforcement sender to data
     {
+        let mut mutable_data = data.clone();
+        mutable_data.set_enforcement_tx(enforcement_tx);
+        
+        // Insert bot data into client
         let mut client_data = client.data.write().await;
-        client_data.insert::<Data>(data.clone());
+        client_data.insert::<Data>(mutable_data);
     }
     
     let client_handle = client.start();

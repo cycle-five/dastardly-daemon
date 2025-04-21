@@ -1,6 +1,7 @@
 use crate::{
     Data, Error,
     data::{EnforcementAction, GuildConfig, NotificationMethod, PendingEnforcement, Warning},
+    enforcement::EnforcementCheckRequest,
 };
 use chrono::{Duration, Utc};
 use poise::serenity_prelude::{Colour, CreateEmbed, CreateMessage, Mentionable, Timestamp, User};
@@ -157,6 +158,22 @@ pub async fn warn(
     if let Err(e) = ctx.data().save().await {
         error!("Failed to save data after warning: {}", e);
     }
+    
+    // If there's an immediate action, notify the enforcement task
+    if let Some(action) = &warning.enforcement {
+        match action {
+            EnforcementAction::DelayedKick { delay } if *delay == 0 => {
+                // For immediate kicks, notify the enforcement task
+                if let Some(tx) = &ctx.data().enforcement_tx {
+                    let _ = tx.send(EnforcementCheckRequest::CheckUser { 
+                        user_id: user.id.get(), 
+                        guild_id: guild_id.get() 
+                    }).await;
+                }
+            },
+            _ => {} // Other actions will be handled by the regular check interval
+        }
+    }
 
     ctx.say(format!("Warned {} for: {}", user.name, warning.reason))
         .await?;
@@ -202,6 +219,13 @@ pub async fn cancelwarning(
                 "Canceled enforcement ID {} for {}\n",
                 id, user.name
             ));
+            
+            // Notify the enforcement task that this enforcement has been canceled
+            if let Some(tx) = &ctx.data().enforcement_tx {
+                let _ = tx.send(EnforcementCheckRequest::CheckEnforcement { 
+                    enforcement_id: id.clone() 
+                }).await;
+            }
         }
     }
 

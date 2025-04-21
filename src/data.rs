@@ -4,6 +4,8 @@ use dashmap::DashMap;
 use poise::serenity_prelude as serenity;
 use serenity::prelude::TypeMapKey;
 use serde::{Deserialize, Serialize};
+use tokio::sync::mpsc::Sender;
+use crate::enforcement::EnforcementCheckRequest;
 
 /// Guild configuration structure.
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -83,6 +85,8 @@ pub struct Data {
     pub warnings: DashMap<String, Warning>,
     // Map of enforcement_id -> pending enforcement
     pub pending_enforcements: DashMap<String, PendingEnforcement>,
+    // Channel to send enforcement check requests
+    pub enforcement_tx: Option<Sender<EnforcementCheckRequest>>,
 }
 
 // Implement TypeMapKey for Data to allow storing it in Serenity's data map
@@ -116,7 +120,13 @@ impl Data {
             cache: Arc::new(serenity::Cache::default()),
             warnings: DashMap::new(),
             pending_enforcements: DashMap::new(),
+            enforcement_tx: None,
         }
+    }
+    
+    /// Set the enforcement task sender
+    pub fn set_enforcement_tx(&mut self, tx: Sender<EnforcementCheckRequest>) {
+        self.enforcement_tx = Some(tx);
     }
 
     /// Load data from YAML file
