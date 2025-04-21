@@ -35,13 +35,13 @@ pub enum EnforcementAction {
     #[default]
     None,
     Mute {
-        duration: u64,
+        duration: Option<u64>,
     },
     Ban {
-        duration: u64,
+        duration: Option<u64>,
     },
-    DelayedKick {
-        delay: u64,
+    Kick {
+        delay: Option<u64>,
     },
 }
 
@@ -273,7 +273,7 @@ mod tests {
             guild_id: 12345,
             music_channel_id: Some(67890),
             default_notification_method: NotificationMethod::DirectMessage,
-            default_enforcement: Some(EnforcementAction::Mute { duration: 3600 }),
+            default_enforcement: Some(EnforcementAction::Mute { duration: Some(3600) }),
         };
 
         // Test serialization
@@ -293,7 +293,7 @@ mod tests {
             NotificationMethod::DirectMessage
         ));
         if let Some(EnforcementAction::Mute { duration }) = deserialized.default_enforcement {
-            assert_eq!(duration, 3600);
+            assert_eq!(duration, Some(3600));
         } else {
             panic!("Expected Mute enforcement");
         }
@@ -309,7 +309,7 @@ mod tests {
             reason: "Test warning".to_string(),
             timestamp: "2023-01-01T00:00:00Z".to_string(),
             notification_method: NotificationMethod::PublicWithMention,
-            enforcement: Some(EnforcementAction::DelayedKick { delay: 86400 }),
+            enforcement: Some(EnforcementAction::Kick { delay: Some(86400) }),
         };
 
         let serialized = serde_yaml::to_string(&warning).expect("Failed to serialize");
@@ -327,8 +327,8 @@ mod tests {
             deserialized.notification_method,
             NotificationMethod::PublicWithMention
         ));
-        if let Some(EnforcementAction::DelayedKick { delay }) = deserialized.enforcement {
-            assert_eq!(delay, 86400);
+        if let Some(EnforcementAction::Kick { delay }) = deserialized.enforcement {
+            assert_eq!(delay, Some(86400));
         } else {
             panic!("Expected DelayedKick enforcement");
         }
@@ -341,7 +341,7 @@ mod tests {
             warning_id: "warn-id".to_string(),
             user_id: 12345,
             guild_id: 11111,
-            action: EnforcementAction::Ban { duration: 604800 },
+            action: EnforcementAction::Ban { duration: Some(604800) },
             execute_at: "2023-01-02T00:00:00Z".to_string(),
             executed: false,
         };
@@ -358,7 +358,7 @@ mod tests {
         assert_eq!(deserialized.warning_id, "warn-id");
         assert!(!deserialized.executed);
         if let EnforcementAction::Ban { duration } = deserialized.action {
-            assert_eq!(duration, 604800);
+            assert_eq!(duration, Some(604800));
         } else {
             panic!("Expected Ban enforcement");
         }

@@ -206,14 +206,13 @@ async fn execute_enforcement(http: &Http, data: &Data, enforcement_id: &str) -> 
                     false => {
                         // Apply mute (timeout)
                         info!(
-                            "Muting user {} in guild {} for {} seconds",
-                            user_id, guild_id, duration
+                            "Muting user {user_id} in guild {guild_id} for {duration:?} seconds"
                         );
                         if let Ok(guild) = guild_id.to_partial_guild(http).await {
                             if let Ok(mut member) = guild.member(http, user_id).await {
                                 #[allow(clippy::cast_possible_wrap)]
                                 let timeout_until =
-                                    Utc::now() + chrono::Duration::seconds(*duration as i64);
+                                    Utc::now() + chrono::Duration::seconds(duration.unwrap_or(0) as i64);
                                 if let Err(e) = member
                                     .disable_communication_until_datetime(
                                         http,
@@ -241,47 +240,47 @@ async fn execute_enforcement(http: &Http, data: &Data, enforcement_id: &str) -> 
                 #[allow(clippy::if_not_else)]
                 if !pending.executed {
                     // Ban the user
-                    info!("Banning user {user_id} in guild {guild_id} for {duration} seconds");
+                    info!("Banning user {user_id} in guild {guild_id} for {duration:?} seconds");
 
                     // Convert to days for unban scheduling (used later)
                     let reason =
-                        format!("Temporary ban from warning system for {duration} seconds");
+                        format!("Temporary ban from warning system for {duration:?} seconds");
 
                     if let Err(e) = guild_id.ban_with_reason(http, user_id, 7, &reason).await {
-                        error!("Failed to ban user {}: {}", user_id, e);
+                        error!("Failed to ban user {user_id}: {e}");
                     } else {
-                        info!("Successfully banned user {}", user_id);
+                        info!("Successfully banned user {user_id}");
 
                         // The task will auto-update this to executed = true, and we'll schedule the unban
                         // by creating a new pending enforcement
                     }
                 } else {
                     // Unban the user when duration expires
-                    info!("Unbanning user {} in guild {}", user_id, guild_id);
+                    info!("Unbanning user {user_id} in guild {guild_id}");
                     if let Err(e) = guild_id.unban(http, user_id).await {
-                        error!("Failed to unban user {}: {}", user_id, e);
+                        error!("Failed to unban user {user_id}: {e}");
                     } else {
-                        info!("Successfully unbanned user {}", user_id);
+                        info!("Successfully unbanned user {user_id}");
                     }
                 }
             }
-            EnforcementAction::DelayedKick { delay } => {
-                if *delay == 0 || pending.executed {
+            EnforcementAction::Kick { delay } => {
+                if delay.is_none() || delay.is_some_and(|d| d == 0) || pending.executed {
                     // Kick immediately or when the delay expires
-                    info!("Kicking user {} from guild {}", user_id, guild_id);
+                    info!("Kicking user {user_id} from guild {guild_id}");
                     if let Ok(guild) = guild_id.to_partial_guild(http).await {
                         if let Ok(member) = guild.member(http, user_id).await {
                             let reason = "Kicked by warning system";
                             if let Err(e) = member.kick_with_reason(http, reason).await {
-                                error!("Failed to kick user {}: {}", user_id, e);
+                                error!("Failed to kick user {user_id}: {e}");
                             } else {
-                                info!("Successfully kicked user {}", user_id);
+                                info!("Successfully kicked user {user_id}");
                             }
                         }
                     }
                 } else {
                     // This is a delayed kick that hasn't reached its time yet - do nothing
-                    info!("Delayed kick for user {} is not ready yet", user_id);
+                    info!("Delayed kick for user {user_id} is not ready yet");
                     // Will be handled when execution time is reached
                     return Ok(());
                 }

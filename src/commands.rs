@@ -26,8 +26,9 @@ pub async fn warn(
     #[description = "Reason for warning"] reason: String,
     #[description = "Notification method (DM or Public)"] notification: Option<String>,
     #[description = "Action to take (mute, ban, kick)"] action: Option<String>,
-    #[description = "Duration in minutes for mute/ban, delay for kick"] duration_hours: Option<u64>,
+    #[description = "Duration in minutes for mute/ban, delay for kick"] duration_minutes: Option<u64>,
 ) -> Result<(), Error> {
+    ctx.defer().await?;
     let guild_id = ctx
         .guild_id()
         .ok_or("This command must be used in a guild")?;
@@ -49,16 +50,16 @@ pub async fn warn(
     };
 
     // Determine enforcement action
-    let duration = duration_hours.unwrap_or(24);
+    let duration = duration_minutes.map(|d| d * 60);
     let enforcement = match action.as_deref() {
         Some("mute" | "Mute") => Some(EnforcementAction::Mute {
-            duration: duration * 60,
+            duration,
         }),
         Some("ban" | "Ban") => Some(EnforcementAction::Ban {
-            duration: duration * 60,
+            duration
         }),
-        Some("kick" | "Kick") => Some(EnforcementAction::DelayedKick {
-            delay: duration * 60,
+        Some("kick" | "Kick") => Some(EnforcementAction::Kick {
+            delay: duration,
         }),
         _ => guild_config.default_enforcement,
     };
@@ -88,11 +89,11 @@ pub async fn warn(
         let execute_at = match &action {
             #[allow(clippy::cast_possible_wrap)]
             EnforcementAction::Ban { duration } | EnforcementAction::Mute { duration } => {
-                Utc::now() + Duration::seconds(*duration as i64)
+                Utc::now() + Duration::seconds(duration.unwrap_or(0) as i64)
             }
             #[allow(clippy::cast_possible_wrap)]
-            EnforcementAction::DelayedKick { delay } => {
-                Utc::now() + Duration::seconds(*delay as i64)
+            EnforcementAction::Kick { delay } => {
+                Utc::now() + Duration::seconds(delay.unwrap_or(0) as i64)
             }
             EnforcementAction::None => unreachable!(),
         };
@@ -165,7 +166,7 @@ pub async fn warn(
     // If there's an immediate action, notify the enforcement task
     if let Some(action) = &warning.enforcement {
         match action {
-            EnforcementAction::DelayedKick { delay } if *delay == 0 => {
+            EnforcementAction::Kick { delay } if delay.is_some_and(|d| d == 0) || delay.is_none() => {
                 // For immediate kicks, notify the enforcement task
                 if let Some(tx) = &ctx.data().enforcement_tx {
                     let _ = tx
