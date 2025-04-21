@@ -46,6 +46,16 @@ pub enum EnforcementAction {
     Kick {
         delay: Option<u64>,
     },
+    // Voice channel specific actions
+    VoiceMute {
+        duration: Option<u64>,
+    },
+    VoiceDeafen {
+        duration: Option<u64>,
+    },
+    VoiceDisconnect {
+        delay: Option<u64>,
+    },
 }
 
 /// Represents a warning issued to a user

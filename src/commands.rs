@@ -25,8 +25,8 @@ pub async fn warn(
     #[description = "User to warn"] user: User,
     #[description = "Reason for warning"] reason: String,
     #[description = "Notification method (DM or Public)"] notification: Option<String>,
-    #[description = "Action to take (mute, ban, kick)"] action: Option<String>,
-    #[description = "Duration in minutes for mute/ban, delay for kick"] duration_minutes: Option<
+    #[description = "Action to take (mute, ban, kick, voicemute, voicedeafen, voicedisconnect)"] action: Option<String>,
+    #[description = "Duration in minutes for mute/ban/voicemute/voicedeafen, delay for kick/voicedisconnect"] duration_minutes: Option<
         u64,
     >,
 ) -> Result<(), Error> {
@@ -57,6 +57,9 @@ pub async fn warn(
         Some("mute" | "Mute") => Some(EnforcementAction::Mute { duration }),
         Some("ban" | "Ban") => Some(EnforcementAction::Ban { duration }),
         Some("kick" | "Kick") => Some(EnforcementAction::Kick { delay: duration }),
+        Some("voicemute" | "VoiceMute") => Some(EnforcementAction::VoiceMute { duration }),
+        Some("voicedeafen" | "VoiceDeafen") => Some(EnforcementAction::VoiceDeafen { duration }),
+        Some("voicedisconnect" | "VoiceDisconnect") => Some(EnforcementAction::VoiceDisconnect { delay: duration }),
         _ => guild_config.default_enforcement,
     };
 
@@ -86,11 +89,12 @@ pub async fn warn(
         let enforcement_id = Uuid::new_v4().to_string();
         let execute_at = match &action {
             #[allow(clippy::cast_possible_wrap)]
-            EnforcementAction::Ban { duration } | EnforcementAction::Mute { duration } => {
+            EnforcementAction::Ban { duration } | EnforcementAction::Mute { duration } |
+            EnforcementAction::VoiceMute { duration } | EnforcementAction::VoiceDeafen { duration } => {
                 Utc::now() + Duration::seconds(duration.unwrap_or(0) as i64)
             }
             #[allow(clippy::cast_possible_wrap)]
-            EnforcementAction::Kick { delay } => {
+            EnforcementAction::Kick { delay } | EnforcementAction::VoiceDisconnect { delay } => {
                 Utc::now() + Duration::seconds(delay.unwrap_or(0) as i64)
             }
             EnforcementAction::None => unreachable!(),
@@ -193,13 +197,16 @@ pub async fn warn(
 
         // Check if this is an immediate action
         let is_immediate = match action {
-            EnforcementAction::Kick { delay } => delay.is_none() || delay.is_some_and(|d| d == 0),
-            EnforcementAction::Mute { duration } => {
-                duration.is_none() || duration.is_some_and(|d| d == 0)
-            }
+            EnforcementAction::Kick { delay } | EnforcementAction::VoiceDisconnect { delay } => 
+                delay.is_none() || delay.is_some_and(|d| d == 0),
+                
+            EnforcementAction::Mute { duration } | 
+            EnforcementAction::VoiceMute { duration } |
+            EnforcementAction::VoiceDeafen { duration } |
             EnforcementAction::Ban { duration } => {
                 duration.is_none() || duration.is_some_and(|d| d == 0)
             }
+            
             EnforcementAction::None => false,
         };
 

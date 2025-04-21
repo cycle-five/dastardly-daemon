@@ -257,12 +257,9 @@ async fn execute_enforcement(http: &Http, data: &Data, enforcement_id: &str) -> 
                                     )
                                     .await
                                 {
-                                    error!("Failed to mute user {}: {}", user_id, e);
+                                    error!("Failed to mute user {user_id}: {e}");
                                 } else {
-                                    info!(
-                                        "Successfully muted user {} until {}",
-                                        user_id, timeout_until
-                                    );
+                                    info!("Successfully muted user {user_id} until {timeout_until}");
                                 }
                             }
                         }
@@ -318,6 +315,118 @@ async fn execute_enforcement(http: &Http, data: &Data, enforcement_id: &str) -> 
                 } else {
                     // This is a delayed kick that hasn't reached its time yet - do nothing
                     info!("Delayed kick for user {user_id} is not ready yet");
+                    // Will be handled when execution time is reached
+                    return Ok(());
+                }
+            }
+            EnforcementAction::VoiceMute { duration } => {
+                #[allow(clippy::match_bool)]
+                match pending.executed {
+                    false => {
+                        // Apply voice mute
+                        info!("Voice muting user {user_id} in guild {guild_id} for {duration:?} seconds");
+                        if let Ok(guild) = guild_id.to_partial_guild(http).await {
+                            if let Ok(mut member) = guild.member(http, user_id).await {
+                                use poise::serenity_prelude::builder::EditMember;
+                                
+                                // Apply voice mute
+                                if let Err(e) = member.edit(http, EditMember::new().mute(true)).await {
+                                    error!("Failed to voice mute user {}: {}", user_id, e);
+                                } else {
+                                    info!("Successfully voice muted user {}", user_id);
+                                    
+                                    // If there's a duration, schedule an un-mute task
+                                    if let Some(dur) = duration {
+                                        if *dur > 0 {
+                                            // Mute is active, schedule an unmute task
+                                            // This could be implemented by creating a new enforcement
+                                            // with the executed flag set to true that will unmute when processed
+                                            // But for now we'll rely on manual unmuting
+                                            info!("Voice mute will need to be manually removed after {} seconds", dur);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    true => {
+                        // Remove the voice mute
+                        info!("Voice mute period expired for user {user_id} in guild {guild_id}");
+                        if let Ok(guild) = guild_id.to_partial_guild(http).await {
+                            if let Ok(mut member) = guild.member(http, user_id).await {
+                                use poise::serenity_prelude::builder::EditMember;
+                                
+                                if let Err(e) = member.edit(http, EditMember::new().mute(false)).await {
+                                    error!("Failed to remove voice mute from user {}: {}", user_id, e);
+                                } else {
+                                    info!("Successfully removed voice mute from user {}", user_id);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            EnforcementAction::VoiceDeafen { duration } => {
+                #[allow(clippy::match_bool)]
+                match pending.executed {
+                    false => {
+                        // Apply voice deafen
+                        info!("Voice deafening user {user_id} in guild {guild_id} for {duration:?} seconds");
+                        if let Ok(guild) = guild_id.to_partial_guild(http).await {
+                            if let Ok(mut member) = guild.member(http, user_id).await {
+                                use poise::serenity_prelude::builder::EditMember;
+                                
+                                // Apply voice deafen
+                                if let Err(e) = member.edit(http, EditMember::new().deafen(true)).await {
+                                    error!("Failed to voice deafen user {}: {}", user_id, e);
+                                } else {
+                                    info!("Successfully voice deafened user {}", user_id);
+                                    
+                                    // If there's a duration, schedule an un-deafen task
+                                    if let Some(dur) = duration {
+                                        if *dur > 0 {
+                                            // Deafen is active, scheduling an undeafen would require a separate task
+                                            info!("Voice deafen will need to be manually removed after {} seconds", dur);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    true => {
+                        // Remove the voice deafen
+                        info!("Voice deafen period expired for user {user_id} in guild {guild_id}");
+                        if let Ok(guild) = guild_id.to_partial_guild(http).await {
+                            if let Ok(mut member) = guild.member(http, user_id).await {
+                                use poise::serenity_prelude::builder::EditMember;
+                                
+                                if let Err(e) = member.edit(http, EditMember::new().deafen(false)).await {
+                                    error!("Failed to remove voice deafen from user {}: {}", user_id, e);
+                                } else {
+                                    info!("Successfully removed voice deafen from user {}", user_id);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            EnforcementAction::VoiceDisconnect { delay } => {
+                if delay.is_none() || delay.is_some_and(|d| d == 0) || pending.executed {
+                    // Disconnect immediately or when the delay expires
+                    info!("Disconnecting user {user_id} from voice in guild {guild_id}");
+                    if let Ok(guild) = guild_id.to_partial_guild(http).await {
+                        if let Ok(member) = guild.member(http, user_id).await {
+                            // Disconnect from voice channel
+                            if let Err(e) = member.disconnect_from_voice(http).await {
+                                error!("Failed to disconnect user {} from voice: {}", user_id, e);
+                            } else {
+                                info!("Successfully disconnected user {} from voice", user_id);
+                            }
+                        }
+                    }
+                } else {
+                    // This is a delayed disconnect that hasn't reached its time yet - do nothing
+                    info!("Delayed voice disconnect for user {user_id} is not ready yet");
                     // Will be handled when execution time is reached
                     return Ok(());
                 }
