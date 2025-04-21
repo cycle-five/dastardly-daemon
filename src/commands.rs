@@ -64,6 +64,8 @@ pub async fn warn(
         _ => guild_config.default_enforcement,
     };
 
+    warn!("Enforcement action: {enforcement:?}");
+
     // Create warning
     let warning_id = Uuid::new_v4().to_string();
     let now = Utc::now().to_rfc3339();
@@ -176,21 +178,48 @@ pub async fn warn(
 
     // If there's an immediate action, notify the enforcement task
     if let Some(action) = &warning.enforcement {
-        match action {
-            EnforcementAction::Kick { delay } if delay.is_some_and(|d| d == 0) || delay.is_none() => {
-                // For immediate kicks, notify the enforcement task
-                if let Some(tx) = &ctx.data().enforcement_tx {
-                    let _ = tx
-                        .send(EnforcementCheckRequest::CheckUser {
-                            user_id: user.id.get(),
-                            guild_id: guild_id.get(),
-                        })
-                        .await;
-                }
+        info!(
+            target: crate::COMMAND_TARGET,
+            command = "warn",
+            guild_id = %guild_id.get(),
+            user_id = %user.id.get(),
+            issuer_id = %ctx.author().id.get(),
+            reason = %warning.reason,
+            event = "immediate_enforcement_check",
+            enforcement_action = ?action,
+            "Immediate enforcement action detected"
+        );
+        
+        // Check if this is an immediate action
+        let is_immediate = match action {
+            EnforcementAction::Kick { delay } => delay.is_none() || delay.is_some_and(|d| d == 0),
+            EnforcementAction::Mute { duration } => duration.is_none() || duration.is_some_and(|d| d == 0),
+            EnforcementAction::Ban { duration } => duration.is_none() || duration.is_some_and(|d| d == 0),
+            EnforcementAction::None => false,
+        };
+        
+        if is_immediate {
+            info!(
+                target: crate::COMMAND_TARGET,
+                command = "warn",
+                guild_id = %guild_id.get(),
+                user_id = %user.id.get(),
+                issuer_id = %ctx.author().id.get(),
+                event = "immediate_enforcement_request",
+                "Sending immediate enforcement check request"
+            );
+            // For immediate actions, notify the enforcement task
+            if let Some(tx) = &*ctx.data().enforcement_tx {
+                let _ = tx
+                    .send(EnforcementCheckRequest::CheckUser {
+                        user_id: user.id.get(),
+                        guild_id: guild_id.get(),
+                    })
+                    .await;
             }
-            _ => {
-                warn!("Enforcement action is not immediate: {action:?}");
-            } // Other actions will be handled by the regular check interval
+        } else {
+            warn!("Enforcement action is not immediate: {action:?}");
+            // Non-immediate actions will be handled by the regular check interval
         }
     }
 
@@ -246,7 +275,7 @@ pub async fn cancelwarning(
             ));
 
             // Notify the enforcement task that this enforcement has been canceled
-            if let Some(tx) = &ctx.data().enforcement_tx {
+            if let Some(tx) = &*ctx.data().enforcement_tx {
                 let _ = tx
                     .send(EnforcementCheckRequest::CheckEnforcement {
                         enforcement_id: id.clone(),

@@ -82,7 +82,7 @@ pub struct Data {
     // Map of enforcement_id -> pending enforcement
     pub pending_enforcements: DashMap<String, PendingEnforcement>,
     // Channel to send enforcement check requests
-    pub enforcement_tx: Option<Sender<EnforcementCheckRequest>>,
+    pub enforcement_tx: Arc<Option<Sender<EnforcementCheckRequest>>>,
 }
 
 // Implement TypeMapKey for Data to allow storing it in Serenity's data map
@@ -117,13 +117,13 @@ impl Data {
             cache: Arc::new(serenity::Cache::default()),
             warnings: DashMap::new(),
             pending_enforcements: DashMap::new(),
-            enforcement_tx: None,
+            enforcement_tx: Arc::new(None),
         }
     }
 
     /// Set the enforcement task sender
     pub fn set_enforcement_tx(&mut self, tx: Sender<EnforcementCheckRequest>) {
-        self.enforcement_tx = Some(tx);
+        self.enforcement_tx = Arc::new(Some(tx));
     }
 
     /// Load data from YAML file

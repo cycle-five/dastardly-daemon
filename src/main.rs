@@ -30,7 +30,19 @@ async fn async_main() -> Result<(), Error> {
 
     // Load the bot's data from file
     info!("Loading bot data...");
-    let data = Data::load().await;
+    let mut data = Data::load().await;
+
+    // Start the enforcement task with a 60-second check interval
+    info!("Starting enforcement task...");
+    let enforcement_tx = enforcement::start_enforcement_task(
+        serenity::Http::new(&token).into(),
+        data.clone(),
+        60, // Check interval in seconds
+    );
+    
+    // Set the enforcement sender in the data
+    data.set_enforcement_tx(enforcement_tx);
+
     let data_clone = data.clone();
 
     // Configure the Poise framework
@@ -84,21 +96,10 @@ async fn async_main() -> Result<(), Error> {
 
     info!("Starting bot...");
 
-    // Start the enforcement task with a 60-second check interval
-    let enforcement_tx = enforcement::start_enforcement_task(
-        client.http.clone(),
-        data.clone(),
-        60, // Check interval in seconds
-    );
-
-    // Add enforcement sender to data
+    // Insert bot data into client (for event handlers)
     {
-        let mut mutable_data = data.clone();
-        mutable_data.set_enforcement_tx(enforcement_tx);
-
-        // Insert bot data into client
         let mut client_data = client.data.write().await;
-        client_data.insert::<Data>(mutable_data);
+        client_data.insert::<Data>(data.clone());
     }
 
     let client_handle = client.start();
