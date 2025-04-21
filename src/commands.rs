@@ -109,9 +109,11 @@ pub async fn warn(
             execute_at: execute_at.to_rfc3339(),
             executed: false,
         };
+        info!("Pending enforcement created: {pending:?}");
         ctx.data()
             .pending_enforcements
             .insert(enforcement_id, pending);
+        info!("Pending enforcements: {:?}", ctx.data().pending_enforcements);
     }
 
     // Notify user based on notification method

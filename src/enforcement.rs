@@ -138,6 +138,7 @@ async fn check_user_enforcements(
 ) -> Result<(), Error> {
     let mut enforcements_to_execute = Vec::new();
 
+    info!("pending_enforcements: {:?}", data.pending_enforcements);
     // Find enforcements for this user in this guild
     for entry in &data.pending_enforcements {
         let pending = entry.value();
@@ -148,6 +149,7 @@ async fn check_user_enforcements(
 
     // Execute each enforcement
     let enforcements_to_execute_clone = enforcements_to_execute.clone();
+
     for id in enforcements_to_execute_clone {
         execute_enforcement(http, data, &id).await?;
     }
