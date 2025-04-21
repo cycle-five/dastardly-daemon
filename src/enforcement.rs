@@ -1,7 +1,6 @@
-use crate::{Data, Error, EnforcementAction};
+use crate::{Data, Error};
+use crate::data::EnforcementAction;
 use poise::serenity_prelude::{
-    self as serenity, 
-    Context, 
     GuildId, 
     UserId,
     Http
@@ -9,7 +8,7 @@ use poise::serenity_prelude::{
 use chrono::{Utc, DateTime};
 use tracing::{info, error, warn};
 use tokio::sync::mpsc::{self, Sender, Receiver};
-use tokio::time::{sleep, Duration};
+use tokio::time::Duration;
 use std::sync::Arc;
 
 /// Type of enforcement check request
@@ -103,12 +102,11 @@ async fn check_all_enforcements(http: &Http, data: &Data) -> Result<(), Error> {
     let mut enforcements_to_execute = Vec::new();
     
     // Find enforcements that need to be executed
-    for entry in data.pending_enforcements.iter() {
+    for entry in &data.pending_enforcements {
         let pending = entry.value();
         if !pending.executed {
             let execute_at = DateTime::parse_from_rfc3339(&pending.execute_at)
-                .map(|dt| dt.with_timezone(&Utc))
-                .unwrap_or_else(|_| DateTime::<Utc>::MIN_UTC);
+                .map_or_else(|_| DateTime::<Utc>::MIN_UTC, |dt| dt.with_timezone(&Utc));
                 
             if execute_at <= now {
                 enforcements_to_execute.push(pending.id.clone());
@@ -134,11 +132,10 @@ async fn check_all_enforcements(http: &Http, data: &Data) -> Result<(), Error> {
 
 /// Check enforcements for a specific user in a specific guild
 async fn check_user_enforcements(http: &Http, data: &Data, user_id: u64, guild_id: u64) -> Result<(), Error> {
-    let now = Utc::now();
     let mut enforcements_to_execute = Vec::new();
     
     // Find enforcements for this user in this guild
-    for entry in data.pending_enforcements.iter() {
+    for entry in &data.pending_enforcements {
         let pending = entry.value();
         if !pending.executed 
             && pending.user_id == user_id 
@@ -191,39 +188,76 @@ async fn execute_enforcement(http: &Http, data: &Data, enforcement_id: &str) -> 
         
         // Execute the action based on the type
         match &pending.action {
-            EnforcementAction::Mute { duration: _ } => {
-                // Unmute the user
-                info!("Unmuting user {} in guild {}", user_id, guild_id);
-                if let Ok(guild) = guild_id.to_partial_guild(http).await {
-                    if let Ok(mut member) = guild.member(http, user_id).await {
-                        if let Err(e) = member.remove_timeout(http).await {
-                            error!("Failed to unmute user {}: {}", user_id, e);
+            EnforcementAction::Mute { duration } => {
+                match pending.executed {
+                    false => {
+                        // Apply mute (timeout)
+                        info!("Muting user {} in guild {} for {} seconds", user_id, guild_id, duration);
+                        if let Ok(guild) = guild_id.to_partial_guild(http).await {
+                            if let Ok(mut member) = guild.member(http, user_id).await {
+                                let timeout_until = Utc::now() + chrono::Duration::seconds(*duration as i64);
+                                if let Err(e) = member.disable_communication_until_datetime(http, timeout_until.into()).await {
+                                    error!("Failed to mute user {}: {}", user_id, e);
+                                } else {
+                                    info!("Successfully muted user {} until {}", user_id, timeout_until);
+                                }
+                            }
+                        }
+                    },
+                    true => {
+                        // Remove the mute (automatic by Discord based on timestamp)
+                        info!("Mute period expired for user {user_id} in guild {guild_id}");
+                    }
+                }
+            },
+            EnforcementAction::Ban { duration } => {
+                match pending.executed {
+                    false => {
+                        // Ban the user
+                        info!("Banning user {user_id} in guild {guild_id} for {duration} seconds");
+                        
+                        // Convert to days for unban scheduling (used later)
+                        let reason = format!("Temporary ban from warning system for {duration} seconds");
+                        
+                        if let Err(e) = guild_id.ban_with_reason(http, user_id, 7, &reason).await {
+                            error!("Failed to ban user {}: {}", user_id, e);
                         } else {
-                            info!("Successfully unmuted user {}", user_id);
+                            info!("Successfully banned user {}", user_id);
+                            
+                            // The task will auto-update this to executed = true, and we'll schedule the unban
+                            // by creating a new pending enforcement
+                        }
+                    },
+                    true => {
+                        // Unban the user when duration expires
+                        info!("Unbanning user {} in guild {}", user_id, guild_id);
+                        if let Err(e) = guild_id.unban(http, user_id).await {
+                            error!("Failed to unban user {}: {}", user_id, e);
+                        } else {
+                            info!("Successfully unbanned user {}", user_id);
                         }
                     }
                 }
             },
-            EnforcementAction::Ban { duration: _ } => {
-                // Unban the user
-                info!("Unbanning user {} in guild {}", user_id, guild_id);
-                if let Err(e) = guild_id.unban(http, user_id).await {
-                    error!("Failed to unban user {}: {}", user_id, e);
+            EnforcementAction::DelayedKick { delay } => {
+                if *delay == 0 || pending.executed {
+                    // Kick immediately or when the delay expires
+                    info!("Kicking user {} from guild {}", user_id, guild_id);
+                    if let Ok(guild) = guild_id.to_partial_guild(http).await {
+                        if let Ok(member) = guild.member(http, user_id).await {
+                            let reason = "Kicked by warning system";
+                            if let Err(e) = member.kick_with_reason(http, reason).await {
+                                error!("Failed to kick user {}: {}", user_id, e);
+                            } else {
+                                info!("Successfully kicked user {}", user_id);
+                            }
+                        }
+                    }
                 } else {
-                    info!("Successfully unbanned user {}", user_id);
-                }
-            },
-            EnforcementAction::DelayedKick { delay: _ } => {
-                // Kick the user
-                info!("Kicking user {} from guild {}", user_id, guild_id);
-                if let Ok(guild) = guild_id.to_partial_guild(http).await {
-                    if let Ok(member) = guild.member(http, user_id).await {
-                        if let Err(e) = member.kick(http).await {
-                            error!("Failed to kick user {}: {}", user_id, e);
-                        } else {
-                            info!("Successfully kicked user {}", user_id);
-                        }
-                    }
+                    // This is a delayed kick that hasn't reached its time yet - do nothing
+                    info!("Delayed kick for user {} is not ready yet", user_id);
+                    // Will be handled when execution time is reached
+                    return Ok(());
                 }
             },
             EnforcementAction::None => {}
