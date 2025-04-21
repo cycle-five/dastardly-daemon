@@ -84,19 +84,11 @@ async fn async_main() -> Result<(), Error> {
 
     info!("Starting bot...");
     
-    // Spawn background task to check enforcements
-    let data_for_task = data.clone();
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(std::time::Duration::from_secs(60)); // Check every minute
-        loop {
-            interval.tick().await;
-            
-            // Check for enforcements that need to be executed
-            if let Err(e) = enforcement::check_and_execute_enforcements(&data_for_task).await {
-                tracing::error!("Error in enforcement task: {}", e);
-            }
-        }
-    });
+    // Insert bot data into client
+    {
+        let mut client_data = client.data.write().await;
+        client_data.insert::<Data>(data.clone());
+    }
     
     let client_handle = client.start();
 

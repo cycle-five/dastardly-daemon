@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use dashmap::DashMap;
 use poise::serenity_prelude as serenity;
+use serenity::prelude::TypeMapKey;
 use serde::{Deserialize, Serialize};
 
 /// Guild configuration structure.
@@ -35,9 +36,9 @@ impl Default for NotificationMethod {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EnforcementAction {
     None,
-    Mute { duration: i64 },
-    Ban { duration: i64 },
-    DelayedKick { delay: i64 },
+    Mute { duration: u64 },
+    Ban { duration: u64 },
+    DelayedKick { delay: u64 },
 }
 
 impl Default for EnforcementAction {
@@ -82,6 +83,11 @@ pub struct Data {
     pub warnings: DashMap<String, Warning>,
     // Map of enforcement_id -> pending enforcement
     pub pending_enforcements: DashMap<String, PendingEnforcement>,
+}
+
+// Implement TypeMapKey for Data to allow storing it in Serenity's data map
+impl TypeMapKey for Data {
+    type Value = Data;
 }
 
 impl Default for Data {

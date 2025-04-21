@@ -24,7 +24,7 @@ pub async fn warn(
     #[description = "Reason for warning"] reason: String,
     #[description = "Notification method (DM or Public)"] notification: Option<String>,
     #[description = "Action to take (mute, ban, kick)"] action: Option<String>,
-    #[description = "Duration in hours for mute/ban, delay for kick"] duration_hours: Option<i64>,
+    #[description = "Duration in minutes for mute/ban, delay for kick"] duration_hours: Option<u64>,
 ) -> Result<(), Error> {
     let guild_id = ctx
         .guild_id()
@@ -53,13 +53,13 @@ pub async fn warn(
     let duration = duration_hours.unwrap_or(24);
     let enforcement = match action.as_deref() {
         Some("mute") | Some("Mute") => Some(EnforcementAction::Mute {
-            duration: duration * 3600,
+            duration: duration * 60,
         }),
         Some("ban") | Some("Ban") => Some(EnforcementAction::Ban {
-            duration: duration * 3600,
+            duration: duration * 60,
         }),
         Some("kick") | Some("Kick") => Some(EnforcementAction::DelayedKick {
-            delay: duration * 3600,
+            delay: duration * 60,
         }),
         _ => guild_config.default_enforcement,
     };
@@ -87,9 +87,9 @@ pub async fn warn(
     if let Some(action) = enforcement {
         let enforcement_id = Uuid::new_v4().to_string();
         let execute_at = match &action {
-            EnforcementAction::Mute { duration } => Utc::now() + Duration::seconds(*duration),
-            EnforcementAction::Ban { duration } => Utc::now() + Duration::seconds(*duration),
-            EnforcementAction::DelayedKick { delay } => Utc::now() + Duration::seconds(*delay),
+            EnforcementAction::Mute { duration } => Utc::now() + Duration::seconds(*duration as i64),
+            EnforcementAction::Ban { duration } => Utc::now() + Duration::seconds(*duration as i64),
+            EnforcementAction::DelayedKick { delay } => Utc::now() + Duration::seconds(*delay as i64),
             EnforcementAction::None => unreachable!(),
         };
 
