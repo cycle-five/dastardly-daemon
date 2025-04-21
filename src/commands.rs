@@ -6,7 +6,7 @@ use crate::{
 use chrono::{Duration, Utc};
 use poise::serenity_prelude::{Colour, CreateEmbed, CreateMessage, Mentionable, Timestamp, User};
 use poise::{Context, command};
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
 /// Basic ping command
@@ -163,6 +163,17 @@ pub async fn warn(
         error!("Failed to save data after warning: {}", e);
     }
 
+    info!(
+        target: crate::COMMAND_TARGET,
+        command = "warn",
+        guild_id = %guild_id.get(),
+        user_id = %user.id.get(),
+        issuer_id = %ctx.author().id.get(),
+        reason = %warning.reason,
+        event = "warning_saved",
+        "Warning saved to database"
+    );
+
     // If there's an immediate action, notify the enforcement task
     if let Some(action) = &warning.enforcement {
         match action {
@@ -177,7 +188,9 @@ pub async fn warn(
                         .await;
                 }
             }
-            _ => {} // Other actions will be handled by the regular check interval
+            _ => {
+                warn!("Enforcement action is not immediate: {action:?}");
+            } // Other actions will be handled by the regular check interval
         }
     }
 
