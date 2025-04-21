@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
+use crate::enforcement::EnforcementCheckRequest;
 use dashmap::DashMap;
 use poise::serenity_prelude as serenity;
-use serenity::prelude::TypeMapKey;
 use serde::{Deserialize, Serialize};
+use serenity::prelude::TypeMapKey;
 use tokio::sync::mpsc::Sender;
-use crate::enforcement::EnforcementCheckRequest;
 
 /// Guild configuration structure.
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -22,31 +22,27 @@ pub struct GuildConfig {
 }
 
 /// Notification method for warnings
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub enum NotificationMethod {
+    #[default]
     DirectMessage,
     PublicWithMention,
 }
 
-impl Default for NotificationMethod {
-    fn default() -> Self {
-        NotificationMethod::DirectMessage
-    }
-}
-
 /// Enforcement actions that can be taken as part of a warning
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub enum EnforcementAction {
+    #[default]
     None,
-    Mute { duration: u64 },
-    Ban { duration: u64 },
-    DelayedKick { delay: u64 },
-}
-
-impl Default for EnforcementAction {
-    fn default() -> Self {
-        EnforcementAction::None
-    }
+    Mute {
+        duration: u64,
+    },
+    Ban {
+        duration: u64,
+    },
+    DelayedKick {
+        delay: u64,
+    },
 }
 
 /// Represents a warning issued to a user
@@ -107,6 +103,7 @@ impl std::fmt::Debug for Data {
             .field("cache", &self.cache)
             .field("warnings", &self.warnings)
             .field("pending_enforcements", &self.pending_enforcements)
+            .field("enforcement_tx", &self.enforcement_tx)
             .finish()
     }
 }
@@ -123,7 +120,7 @@ impl Data {
             enforcement_tx: None,
         }
     }
-    
+
     /// Set the enforcement task sender
     pub fn set_enforcement_tx(&mut self, tx: Sender<EnforcementCheckRequest>) {
         self.enforcement_tx = Some(tx);

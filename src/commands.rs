@@ -18,6 +18,7 @@ pub async fn ping(ctx: Context<'_, Data, Error>) -> Result<(), Error> {
 }
 
 /// Warn a user for inappropriate behavior
+#[allow(clippy::too_many_lines)]
 #[command(prefix_command, slash_command, required_permissions = "ADMINISTRATOR")]
 pub async fn warn(
     ctx: Context<'_, Data, Error>,
@@ -32,34 +33,31 @@ pub async fn warn(
         .ok_or("This command must be used in a guild")?;
 
     // Get guild configuration
-    let guild_config = ctx
-        .data()
-        .guild_configs
-        .get(&guild_id)
-        .map(|entry| entry.clone())
-        .unwrap_or_else(|| {
-            let mut config = GuildConfig::default();
-            config.guild_id = guild_id.get();
-            config
-        });
+    let guild_config = ctx.data().guild_configs.get(&guild_id).map_or_else(
+        || GuildConfig {
+            guild_id: guild_id.get(),
+            ..Default::default()
+        },
+        |entry| entry.clone(),
+    );
 
     // Determine notification method
     let notification_method = match notification.as_deref() {
-        Some("public") | Some("Public") => NotificationMethod::PublicWithMention,
-        Some("dm") | Some("DM") => NotificationMethod::DirectMessage,
+        Some("public" | "Public") => NotificationMethod::PublicWithMention,
+        Some("dm" | "DM") => NotificationMethod::DirectMessage,
         _ => guild_config.default_notification_method,
     };
 
     // Determine enforcement action
     let duration = duration_hours.unwrap_or(24);
     let enforcement = match action.as_deref() {
-        Some("mute") | Some("Mute") => Some(EnforcementAction::Mute {
+        Some("mute" | "Mute") => Some(EnforcementAction::Mute {
             duration: duration * 60,
         }),
-        Some("ban") | Some("Ban") => Some(EnforcementAction::Ban {
+        Some("ban" | "Ban") => Some(EnforcementAction::Ban {
             duration: duration * 60,
         }),
-        Some("kick") | Some("Kick") => Some(EnforcementAction::DelayedKick {
+        Some("kick" | "Kick") => Some(EnforcementAction::DelayedKick {
             delay: duration * 60,
         }),
         _ => guild_config.default_enforcement,
@@ -88,9 +86,14 @@ pub async fn warn(
     if let Some(action) = enforcement {
         let enforcement_id = Uuid::new_v4().to_string();
         let execute_at = match &action {
-            EnforcementAction::Mute { duration } => Utc::now() + Duration::seconds(*duration as i64),
-            EnforcementAction::Ban { duration } => Utc::now() + Duration::seconds(*duration as i64),
-            EnforcementAction::DelayedKick { delay } => Utc::now() + Duration::seconds(*delay as i64),
+            #[allow(clippy::cast_possible_wrap)]
+            EnforcementAction::Ban { duration } | EnforcementAction::Mute { duration } => {
+                Utc::now() + Duration::seconds(*duration as i64)
+            }
+            #[allow(clippy::cast_possible_wrap)]
+            EnforcementAction::DelayedKick { delay } => {
+                Utc::now() + Duration::seconds(*delay as i64)
+            }
             EnforcementAction::None => unreachable!(),
         };
 
@@ -158,19 +161,21 @@ pub async fn warn(
     if let Err(e) = ctx.data().save().await {
         error!("Failed to save data after warning: {}", e);
     }
-    
+
     // If there's an immediate action, notify the enforcement task
     if let Some(action) = &warning.enforcement {
         match action {
             EnforcementAction::DelayedKick { delay } if *delay == 0 => {
                 // For immediate kicks, notify the enforcement task
                 if let Some(tx) = &ctx.data().enforcement_tx {
-                    let _ = tx.send(EnforcementCheckRequest::CheckUser { 
-                        user_id: user.id.get(), 
-                        guild_id: guild_id.get() 
-                    }).await;
+                    let _ = tx
+                        .send(EnforcementCheckRequest::CheckUser {
+                            user_id: user.id.get(),
+                            guild_id: guild_id.get(),
+                        })
+                        .await;
                 }
-            },
+            }
             _ => {} // Other actions will be handled by the regular check interval
         }
     }
@@ -181,7 +186,12 @@ pub async fn warn(
 }
 
 /// Cancel a pending enforcement action
-#[command(prefix_command, slash_command, guild_only, required_permissions= "ADMINISTRATOR")]
+#[command(
+    prefix_command,
+    slash_command,
+    guild_only,
+    required_permissions = "ADMINISTRATOR"
+)]
 pub async fn cancelwarning(
     ctx: Context<'_, Data, Error>,
     #[description = "User whose enforcement to cancel"] user: User,
@@ -196,7 +206,7 @@ pub async fn cancelwarning(
 
     // Find pending enforcements for this user in this guild
     let mut pending_to_cancel = Vec::new();
-    for entry in ctx.data().pending_enforcements.iter() {
+    for entry in &ctx.data().pending_enforcements {
         let pending = entry.value();
         if pending.user_id == user_id && pending.guild_id == guild_id.get() && !pending.executed {
             if let Some(ref eid) = enforcement_id {
@@ -215,16 +225,19 @@ pub async fn cancelwarning(
         if let Some(mut pending) = ctx.data().pending_enforcements.get_mut(&id) {
             pending.executed = true;
             canceled = true;
+            #[allow(clippy::format_push_string)]
             response.push_str(&format!(
                 "Canceled enforcement ID {} for {}\n",
                 id, user.name
             ));
-            
+
             // Notify the enforcement task that this enforcement has been canceled
             if let Some(tx) = &ctx.data().enforcement_tx {
-                let _ = tx.send(EnforcementCheckRequest::CheckEnforcement { 
-                    enforcement_id: id.clone() 
-                }).await;
+                let _ = tx
+                    .send(EnforcementCheckRequest::CheckEnforcement {
+                        enforcement_id: id.clone(),
+                    })
+                    .await;
             }
         }
     }

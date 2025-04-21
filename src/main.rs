@@ -1,8 +1,8 @@
 mod commands;
 mod data;
+mod enforcement;
 mod handlers;
 mod logging;
-mod enforcement;
 
 use std::env;
 
@@ -83,24 +83,24 @@ async fn async_main() -> Result<(), Error> {
         .expect("Failed to create client");
 
     info!("Starting bot...");
-    
+
     // Start the enforcement task with a 60-second check interval
     let enforcement_tx = enforcement::start_enforcement_task(
         client.http.clone(),
         data.clone(),
-        60 // Check interval in seconds
+        60, // Check interval in seconds
     );
-    
+
     // Add enforcement sender to data
     {
         let mut mutable_data = data.clone();
         mutable_data.set_enforcement_tx(enforcement_tx);
-        
+
         // Insert bot data into client
         let mut client_data = client.data.write().await;
         client_data.insert::<Data>(mutable_data);
     }
-    
+
     let client_handle = client.start();
 
     // Wait for Ctrl+C or other termination signal
