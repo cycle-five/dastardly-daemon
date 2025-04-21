@@ -82,9 +82,9 @@ async fn async_main() -> Result<(), Error> {
         .expect("Failed to create client");
 
     info!("Starting bot...");
-    
+
     let client_handle = client.start();
-    
+
     // Wait for Ctrl+C or other termination signal
     tokio::select! {
         result = client_handle => {
@@ -96,13 +96,13 @@ async fn async_main() -> Result<(), Error> {
             info!("Received Ctrl+C, shutting down...");
         }
     }
-    
+
     // Save data before shutting down
     info!("Saving bot data...");
     if let Err(err) = data_clone.save().await {
         eprintln!("Error saving bot data: {err}");
     }
-    
+
     info!("Bot shutdown complete");
     Ok(())
 }

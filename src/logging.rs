@@ -212,12 +212,12 @@ mod tests {
         INIT.call_once(|| {
             // Use a test-specific log directory to avoid conflicts
             const TEST_LOG_DIR: &str = "test_logs";
-            
+
             // Clean up any existing test logs
             if Path::new(TEST_LOG_DIR).exists() {
                 let _ = std::fs::remove_dir_all(TEST_LOG_DIR);
             }
-            
+
             // Initialize logging with test configuration
             let _ = init();
         });
@@ -226,7 +226,7 @@ mod tests {
     #[test]
     fn test_log_console() {
         setup();
-        
+
         // Test that log_console doesn't panic
         log_console("Test message");
     }

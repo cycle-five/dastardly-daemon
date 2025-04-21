@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
+use dashmap::DashMap;
 use poise::serenity_prelude as serenity;
 use serde::{Deserialize, Serialize};
-use dashmap::DashMap;
 
 /// Guild configuration structure.
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -121,10 +121,10 @@ impl Data {
         const CONFIG_FILE: &str = "config/bot_config.yaml";
         const WARNINGS_FILE: &str = "config/warnings.yaml";
         const ENFORCEMENTS_FILE: &str = "config/enforcements.yaml";
-        
+
         // Create a new empty Data instance
         let data = Self::new();
-        
+
         // Check if the config file exists
         if let Ok(file_content) = tokio::fs::read_to_string(CONFIG_FILE).await {
             // Try to deserialize the file content
@@ -136,7 +136,7 @@ impl Data {
                 }
             }
         }
-        
+
         // Load warnings
         if let Ok(file_content) = tokio::fs::read_to_string(WARNINGS_FILE).await {
             if let Ok(warnings) = serde_yaml::from_str::<Vec<Warning>>(&file_content) {
@@ -145,16 +145,18 @@ impl Data {
                 }
             }
         }
-        
+
         // Load pending enforcements
         if let Ok(file_content) = tokio::fs::read_to_string(ENFORCEMENTS_FILE).await {
-            if let Ok(enforcements) = serde_yaml::from_str::<Vec<PendingEnforcement>>(&file_content) {
+            if let Ok(enforcements) = serde_yaml::from_str::<Vec<PendingEnforcement>>(&file_content)
+            {
                 for enforcement in enforcements {
-                    data.pending_enforcements.insert(enforcement.id.clone(), enforcement);
+                    data.pending_enforcements
+                        .insert(enforcement.id.clone(), enforcement);
                 }
             }
         }
-        
+
         data
     }
 
@@ -174,40 +176,43 @@ impl Data {
         const CONFIG_FILE: &str = "config/bot_config.yaml";
         const WARNINGS_FILE: &str = "config/warnings.yaml";
         const ENFORCEMENTS_FILE: &str = "config/enforcements.yaml";
-        
+
         // Create the config directory if it doesn't exist
         if !std::path::Path::new(CONFIG_DIR).exists() {
             tokio::fs::create_dir_all(CONFIG_DIR).await?;
         }
-        
+
         // Collect all guild configs into a Vec for serialization
-        let configs: Vec<GuildConfig> = self.guild_configs
+        let configs: Vec<GuildConfig> = self
+            .guild_configs
             .iter()
             .map(|entry| entry.value().clone())
             .collect();
-        
+
         // Serialize the configs to YAML
         let yaml = serde_yaml::to_string(&configs)?;
-        
+
         // Write the YAML to the config file
         tokio::fs::write(CONFIG_FILE, yaml).await?;
-        
+
         // Save warnings
-        let warnings: Vec<Warning> = self.warnings
+        let warnings: Vec<Warning> = self
+            .warnings
             .iter()
             .map(|entry| entry.value().clone())
             .collect();
         let warnings_yaml = serde_yaml::to_string(&warnings)?;
         tokio::fs::write(WARNINGS_FILE, warnings_yaml).await?;
-        
+
         // Save pending enforcements
-        let enforcements: Vec<PendingEnforcement> = self.pending_enforcements
+        let enforcements: Vec<PendingEnforcement> = self
+            .pending_enforcements
             .iter()
             .map(|entry| entry.value().clone())
             .collect();
         let enforcements_yaml = serde_yaml::to_string(&enforcements)?;
         tokio::fs::write(ENFORCEMENTS_FILE, enforcements_yaml).await?;
-        
+
         Ok(())
     }
 }
@@ -231,7 +236,10 @@ mod tests {
         let config = GuildConfig::default();
         assert_eq!(config.guild_id, 0);
         assert!(config.music_channel_id.is_none());
-        assert!(matches!(config.default_notification_method, NotificationMethod::DirectMessage));
+        assert!(matches!(
+            config.default_notification_method,
+            NotificationMethod::DirectMessage
+        ));
         assert!(config.default_enforcement.is_none());
     }
 
@@ -254,19 +262,23 @@ mod tests {
             default_notification_method: NotificationMethod::DirectMessage,
             default_enforcement: Some(EnforcementAction::Mute { duration: 3600 }),
         };
-        
+
         // Test serialization
         let serialized = serde_yaml::to_string(&config).expect("Failed to serialize");
         assert!(serialized.contains("guild_id: 12345"));
         assert!(serialized.contains("music_channel_id: 67890"));
         assert!(serialized.contains("default_notification_method: DirectMessage"));
         assert!(serialized.contains("default_enforcement:"));
-        
+
         // Test deserialization
-        let deserialized: GuildConfig = serde_yaml::from_str(&serialized).expect("Failed to deserialize");
+        let deserialized: GuildConfig =
+            serde_yaml::from_str(&serialized).expect("Failed to deserialize");
         assert_eq!(deserialized.guild_id, 12345);
         assert_eq!(deserialized.music_channel_id, Some(67890));
-        assert!(matches!(deserialized.default_notification_method, NotificationMethod::DirectMessage));
+        assert!(matches!(
+            deserialized.default_notification_method,
+            NotificationMethod::DirectMessage
+        ));
         if let Some(EnforcementAction::Mute { duration }) = deserialized.default_enforcement {
             assert_eq!(duration, 3600);
         } else {
@@ -286,18 +298,22 @@ mod tests {
             notification_method: NotificationMethod::PublicWithMention,
             enforcement: Some(EnforcementAction::DelayedKick { delay: 86400 }),
         };
-        
+
         let serialized = serde_yaml::to_string(&warning).expect("Failed to serialize");
         assert!(serialized.contains("id: test-id"));
         assert!(serialized.contains("user_id: 12345"));
         assert!(serialized.contains("notification_method: PublicWithMention"));
         assert!(serialized.contains("enforcement:"));
         assert!(serialized.contains("DelayedKick:"));
-        
-        let deserialized: Warning = serde_yaml::from_str(&serialized).expect("Failed to deserialize");
+
+        let deserialized: Warning =
+            serde_yaml::from_str(&serialized).expect("Failed to deserialize");
         assert_eq!(deserialized.id, "test-id");
         assert_eq!(deserialized.user_id, 12345);
-        assert!(matches!(deserialized.notification_method, NotificationMethod::PublicWithMention));
+        assert!(matches!(
+            deserialized.notification_method,
+            NotificationMethod::PublicWithMention
+        ));
         if let Some(EnforcementAction::DelayedKick { delay }) = deserialized.enforcement {
             assert_eq!(delay, 86400);
         } else {
@@ -316,14 +332,15 @@ mod tests {
             execute_at: "2023-01-02T00:00:00Z".to_string(),
             executed: false,
         };
-        
+
         let serialized = serde_yaml::to_string(&enforcement).expect("Failed to serialize");
         assert!(serialized.contains("id: enf-id"));
         assert!(serialized.contains("warning_id: warn-id"));
         assert!(serialized.contains("executed: false"));
         assert!(serialized.contains("Ban:"));
-        
-        let deserialized: PendingEnforcement = serde_yaml::from_str(&serialized).expect("Failed to deserialize");
+
+        let deserialized: PendingEnforcement =
+            serde_yaml::from_str(&serialized).expect("Failed to deserialize");
         assert_eq!(deserialized.id, "enf-id");
         assert_eq!(deserialized.warning_id, "warn-id");
         assert!(!deserialized.executed);
