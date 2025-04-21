@@ -32,9 +32,7 @@ mod tests {
     // Test the Handler struct can be created
     #[test]
     fn test_handler_creation() {
-        let handler = Handler;
-        // Just verify we can create the handler
-        // Just verify we can create the handler
+        let _handler = Handler;
         let _another_handler = Handler;
         assert!(true, "Handler can be created");
     }

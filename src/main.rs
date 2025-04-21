@@ -82,7 +82,6 @@ async fn async_main() -> Result<(), Error> {
 
     info!("Starting bot...");
     
-    // Set up a Ctrl+C handler to gracefully shut down
     let client_handle = client.start();
     
     // Wait for Ctrl+C or other termination signal

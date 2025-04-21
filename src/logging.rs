@@ -190,6 +190,7 @@ pub fn log_command_error(error: &FrameworkError<'_, Data, Error>) {
     }
 }
 
+/// Log messages to the console
 pub fn log_console(message: &str) {
     info!(
         target: CONSOLE_TARGET,
@@ -239,9 +240,4 @@ mod tests {
             assert!(cell.borrow().is_some());
         });
     }
-
-    // Note: More comprehensive tests would require mocking the Context
-    // which is challenging due to its complex structure.
-    // In a real-world scenario, you might use integration tests
-    // or a more sophisticated mocking framework.
 }
