@@ -232,46 +232,452 @@ async fn check_specific_enforcement(
     Ok(())
 }
 
+/// Helper function to get guild and member information
+async fn get_guild_and_member(
+    http: &Http,
+    guild_id: GuildId,
+    user_id: UserId,
+) -> Result<(serenity::all::PartialGuild, serenity::all::Member), Error> {
+    let guild = guild_id
+        .to_partial_guild(http)
+        .await
+        .map_err(|e| Error::from(e.to_string()))?;
+
+    let member = guild
+        .member(http, user_id)
+        .await
+        .map_err(|e| Error::from(e.to_string()))?;
+
+    Ok((guild, member))
+}
+
+/// Handle mute enforcement action
+async fn handle_mute_action(
+    http: &Http,
+    guild_id: GuildId,
+    user_id: UserId,
+    duration: &Option<u64>,
+    is_executed: bool,
+) -> Result<(), Error> {
+    if is_executed {
+        // Remove the mute (automatic by Discord based on timestamp)
+        info!("Mute period expired for user {user_id} in guild {guild_id}");
+        return Ok(());
+    }
+
+    // Apply mute (timeout)
+    info!("Muting user {user_id} in guild {guild_id} for {duration:?} seconds");
+
+    if let Ok((_, mut member)) = get_guild_and_member(http, guild_id, user_id).await {
+        #[allow(clippy::cast_possible_wrap)]
+        let timeout_until = Utc::now() + chrono::Duration::seconds(duration.unwrap_or(0) as i64);
+
+        match member
+            .disable_communication_until_datetime(http, timeout_until.into())
+            .await
+        {
+            Ok(_) => {
+                info!("Successfully muted user {user_id} until {timeout_until}");
+            }
+            Err(e) => {
+                error!("Failed to mute user {user_id}: {e}");
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Handle ban enforcement action
+async fn handle_ban_action(
+    http: &Http,
+    guild_id: GuildId,
+    user_id: UserId,
+    duration: &Option<u64>,
+    is_executed: bool,
+) -> Result<(), Error> {
+    if !is_executed {
+        // Ban the user
+        info!("Banning user {user_id} in guild {guild_id} for {duration:?} seconds");
+
+        let reason = format!("Temporary ban from warning system for {duration:?} seconds");
+
+        match guild_id.ban_with_reason(http, user_id, 7, &reason).await {
+            Ok(_) => info!("Successfully banned user {user_id}"),
+            Err(e) => error!("Failed to ban user {user_id}: {e}"),
+        }
+    } else {
+        // Unban the user when duration expires
+        info!("Unbanning user {user_id} in guild {guild_id}");
+        match guild_id.unban(http, user_id).await {
+            Ok(_) => info!("Successfully unbanned user {user_id}"),
+            Err(e) => error!("Failed to unban user {user_id}: {e}"),
+        }
+    }
+
+    Ok(())
+}
+
+/// Handle kick enforcement action
+async fn handle_kick_action(
+    http: &Http,
+    guild_id: GuildId,
+    user_id: UserId,
+    delay: &Option<u64>,
+    is_executed: bool,
+) -> Result<(), Error> {
+    if delay.is_none() || delay.is_some_and(|d| d == 0) || is_executed {
+        // Kick immediately or when the delay expires
+        info!("Kicking user {user_id} from guild {guild_id}");
+
+        if let Ok((_, member)) = get_guild_and_member(http, guild_id, user_id).await {
+            let reason = "Kicked by warning system";
+            match member.kick_with_reason(http, reason).await {
+                Ok(_) => info!("Successfully kicked user {user_id}"),
+                Err(e) => error!("Failed to kick user {user_id}: {e}"),
+            }
+        }
+    } else {
+        // This is a delayed kick that hasn't reached its time yet - do nothing
+        info!("Delayed kick for user {user_id} is not ready yet");
+        return Ok(());
+    }
+
+    Ok(())
+}
+
+/// Handle voice mute enforcement action
+async fn handle_voice_mute_action(
+    http: &Http,
+    guild_id: GuildId,
+    user_id: UserId,
+    duration: &Option<u64>,
+    is_executed: bool,
+) -> Result<(), Error> {
+    use poise::serenity_prelude::builder::EditMember;
+
+    if !is_executed {
+        // Apply voice mute
+        info!("Voice muting user {user_id} in guild {guild_id} for {duration:?} seconds");
+
+        if let Ok((_, mut member)) = get_guild_and_member(http, guild_id, user_id).await {
+            match member.edit(http, EditMember::new().mute(true)).await {
+                Ok(_) => {
+                    info!("Successfully voice muted user {user_id}");
+
+                    // If there's a duration, log that it will need manual removal
+                    if let Some(dur) = duration {
+                        if *dur > 0 {
+                            info!(
+                                "Voice mute will need to be manually removed after {dur} seconds"
+                            );
+                        }
+                    }
+                }
+                Err(e) => error!("Failed to voice mute user {user_id}: {e}"),
+            }
+        }
+    } else {
+        // Remove the voice mute
+        info!("Voice mute period expired for user {user_id} in guild {guild_id}");
+
+        if let Ok((_, mut member)) = get_guild_and_member(http, guild_id, user_id).await {
+            match member.edit(http, EditMember::new().mute(false)).await {
+                Ok(_) => info!("Successfully removed voice mute from user {user_id}"),
+                Err(e) => error!("Failed to remove voice mute from user {user_id}: {e}"),
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Handle voice deafen enforcement action
+async fn handle_voice_deafen_action(
+    http: &Http,
+    guild_id: GuildId,
+    user_id: UserId,
+    duration: &Option<u64>,
+    is_executed: bool,
+) -> Result<(), Error> {
+    use poise::serenity_prelude::builder::EditMember;
+
+    if !is_executed {
+        // Apply voice deafen
+        info!("Voice deafening user {user_id} in guild {guild_id} for {duration:?} seconds");
+
+        if let Ok((_, mut member)) = get_guild_and_member(http, guild_id, user_id).await {
+            match member.edit(http, EditMember::new().deafen(true)).await {
+                Ok(_) => {
+                    info!("Successfully voice deafened user {user_id}");
+
+                    // If there's a duration, log that it will need manual removal
+                    if let Some(dur) = duration {
+                        if *dur > 0 {
+                            info!(
+                                "Voice deafen will need to be manually removed after {dur} seconds"
+                            );
+                        }
+                    }
+                }
+                Err(e) => error!("Failed to voice deafen user {user_id}: {e}"),
+            }
+        }
+    } else {
+        // Remove the voice deafen
+        info!("Voice deafen period expired for user {user_id} in guild {guild_id}");
+
+        if let Ok((_, mut member)) = get_guild_and_member(http, guild_id, user_id).await {
+            match member.edit(http, EditMember::new().deafen(false)).await {
+                Ok(()) => info!("Successfully removed voice deafen from user {user_id}"),
+                Err(e) => error!("Failed to remove voice deafen from user {user_id}: {e}"),
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Handle voice disconnect enforcement action
+async fn handle_voice_disconnect_action(
+    http: &Http,
+    guild_id: GuildId,
+    user_id: UserId,
+    delay: Option<&u64>,
+    is_executed: bool,
+) -> Result<(), Error> {
+    if delay.is_none() || delay.is_some_and(|d| *d == 0) || is_executed {
+        // Disconnect immediately or when the delay expires
+        info!("Disconnecting user {user_id} from voice in guild {guild_id}");
+
+        if let Ok((_, member)) = get_guild_and_member(http, guild_id, user_id).await {
+            // Disconnect from voice channel
+            match member.disconnect_from_voice(http).await {
+                Ok(_) => info!("Successfully disconnected user {user_id} from voice"),
+                Err(e) => error!("Failed to disconnect user {user_id} from voice: {e}"),
+            }
+        }
+    } else {
+        // This is a delayed disconnect that hasn't reached its time yet - do nothing
+        info!("Delayed voice disconnect for user {user_id} is not ready yet");
+        return Ok(());
+    }
+
+    Ok(())
+}
+
+/// Get the current voice channel for a user
+fn get_user_voice_channel(
+    _http: &Http,
+    _guild_id: GuildId,
+    _user_id: UserId,
+) -> Option<ChannelId> {
+    // This is a stub that returns a hardcoded value
+    // In a real implementation, you would query the user's current voice state
+    Some(ChannelId::new(1))
+}
+
+/// Get all voice channels in a guild
+async fn get_guild_voice_channels(
+    http: &Http,
+    guild: &serenity::all::PartialGuild,
+) -> Result<Vec<ChannelId>, Error> {
+    let channels = guild.channels(http).await?;
+
+    let voice_channels = channels
+        .iter()
+        .filter_map(|(id, channel)| {
+            if channel.kind == serenity::all::ChannelType::Voice {
+                Some(*id)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    Ok(voice_channels)
+}
+
+/// Handle voice channel haunting enforcement action
+async fn handle_voice_channel_haunt_action(
+    http: &Http,
+    guild_id: GuildId,
+    user_id: UserId,
+    teleport_count: &Option<u64>,
+    interval: &Option<u64>,
+    return_to_origin: &Option<bool>,
+    original_channel_id: &Option<u64>,
+    is_executed: bool,
+) -> Result<(), Error> {
+    // If already executed, nothing to do
+    if is_executed {
+        return Ok(());
+    }
+
+    info!("Beginning voice channel haunting for user {user_id} in guild {guild_id}");
+
+    // Get guild
+    let (guild, _) = match get_guild_and_member(http, guild_id, user_id).await {
+        Ok(result) => result,
+        Err(e) => {
+            error!("Failed to get guild for haunting: {e}");
+            return Ok(());
+        }
+    };
+
+    // Find the user's current voice channel
+    let current_voice_channel = get_user_voice_channel(http, guild_id, user_id);
+
+    let voice_channel_id = match current_voice_channel {
+        Some(id) => id,
+        None => {
+            error!("User {user_id} is not in a voice channel, cannot haunt");
+            return Ok(());
+        }
+    };
+
+    // Store the original channel ID if it's not already set
+    let original_id = original_channel_id.unwrap_or(voice_channel_id.get());
+
+    // Get all voice channels in the guild
+    let voice_channels = match get_guild_voice_channels(http, &guild).await {
+        Ok(channels) => channels,
+        Err(e) => {
+            error!("Failed to get voice channels: {e}");
+            return Ok(());
+        }
+    };
+
+    if voice_channels.is_empty() {
+        error!("No voice channels found in guild {guild_id} for haunting");
+        return Ok(());
+    }
+
+    // Default parameters or use provided ones
+    let (teleport_count, delay_count) = {
+        let mut rng = rand::thread_rng();
+        let count = teleport_count.unwrap_or_else(|| rand::Rng::gen_range(&mut rng, 1..=3));
+        let delay = interval.unwrap_or_else(|| rand::Rng::gen_range(&mut rng, 5..=15));
+        (count, delay)
+    };
+    let return_to_original = return_to_origin.unwrap_or(true);
+
+    // Schedule the haunting for later execution
+    let http_arc = Arc::new(http);
+    let guild_id_copy = guild_id;
+    let user_id_copy = user_id;
+    let voice_channels_copy = voice_channels.clone();
+
+    //tokio::spawn(async move {
+    let mut failed = false;
+
+    for i in 0..teleport_count {
+        if failed {
+            break;
+        }
+
+        // Pick a random channel (different from current on first teleport)
+        let random_channel =
+            select_random_voice_channel(&voice_channels_copy, i == 0, voice_channel_id);
+
+        // Move the user to the random channel
+        failed = !teleport_user(
+            &http_arc.clone(),
+            guild_id_copy,
+            user_id_copy,
+            random_channel,
+        )
+        .await;
+
+        // Wait before the next teleport if we haven't failed
+        if !failed {
+            tokio::time::sleep(tokio::time::Duration::from_secs(delay_count)).await;
+        }
+    }
+
+    // Return the user to their original channel if specified and we haven't failed
+    if return_to_original && !failed {
+        let original_channel = ChannelId::new(original_id);
+        teleport_user(&http_arc, guild_id_copy, user_id_copy, original_channel).await;
+    }
+    //});
+
+    info!("Voice channel haunting scheduled for user {user_id}");
+    Ok(())
+}
+
+/// Select a random voice channel, optionally ensuring it's different from the current one
+fn select_random_voice_channel(
+    voice_channels: &[ChannelId],
+    must_be_different: bool,
+    current_channel: ChannelId,
+) -> ChannelId {
+    let rng = &mut rand::thread_rng();
+    if !must_be_different || voice_channels.len() <= 1 {
+        // If we don't need a different channel or there's only one channel, just pick randomly
+        let idx = rand::Rng::gen_range(rng, 0..voice_channels.len());
+        return voice_channels[idx];
+    }
+
+    // We need a different channel and have multiple options
+    loop {
+        let idx = rand::Rng::gen_range(rng, 0..voice_channels.len());
+        let channel = voice_channels[idx];
+
+        if channel != current_channel {
+            return channel;
+        }
+    }
+}
+
+/// Teleport a user to a specific voice channel
+async fn teleport_user(
+    http: &Http,
+    guild_id: GuildId,
+    user_id: UserId,
+    channel_id: ChannelId,
+) -> bool {
+    match guild_id.to_partial_guild(http).await {
+        Ok(guild) => match guild.member(http, user_id).await {
+            Ok(mut member) => {
+                info!("Teleporting user {user_id} to channel {channel_id}");
+                match member
+                    .edit(
+                        http,
+                        serenity::builder::EditMember::new().voice_channel(channel_id),
+                    )
+                    .await
+                {
+                    Ok(()) => true,
+                    Err(e) => {
+                        error!("Failed to teleport user {user_id}: {e}");
+                        false
+                    }
+                }
+            }
+            Err(e) => {
+                error!("Failed to get member {user_id}: {e}");
+                false
+            }
+        },
+        Err(e) => {
+            error!("Failed to get guild {guild_id}: {e}");
+            false
+        }
+    }
+}
+
 /// Execute a specific enforcement action
 async fn execute_enforcement(http: &Http, data: &Data, enforcement_id: &str) -> Result<(), Error> {
     if let Some(mut pending) = data.pending_enforcements.get_mut(enforcement_id) {
         let guild_id = GuildId::new(pending.guild_id);
         let user_id = UserId::new(pending.user_id);
+        let is_executed = pending.executed;
 
         // Execute the action based on the type
         match &pending.action {
             EnforcementAction::Mute { duration } => {
-                #[allow(clippy::match_bool)]
-                match pending.executed {
-                    false => {
-                        // Apply mute (timeout)
-                        info!("Muting user {user_id} in guild {guild_id} for {duration:?} seconds");
-                        if let Ok(guild) = guild_id.to_partial_guild(http).await {
-                            if let Ok(mut member) = guild.member(http, user_id).await {
-                                #[allow(clippy::cast_possible_wrap)]
-                                let timeout_until = Utc::now()
-                                    + chrono::Duration::seconds(duration.unwrap_or(0) as i64);
-                                if let Err(e) = member
-                                    .disable_communication_until_datetime(
-                                        http,
-                                        timeout_until.into(),
-                                    )
-                                    .await
-                                {
-                                    error!("Failed to mute user {user_id}: {e}");
-                                } else {
-                                    info!(
-                                        "Successfully muted user {user_id} until {timeout_until}"
-                                    );
-                                }
-                            }
-                        }
-                    }
-                    true => {
-                        // Remove the mute (automatic by Discord based on timestamp)
-                        info!("Mute period expired for user {user_id} in guild {guild_id}");
-                    }
-                }
+                handle_mute_action(http, guild_id, user_id, duration, is_executed).await?;
             }
             EnforcementAction::VoiceChannelHaunt {
                 teleport_count,
@@ -279,345 +685,32 @@ async fn execute_enforcement(http: &Http, data: &Data, enforcement_id: &str) -> 
                 return_to_origin,
                 original_channel_id,
             } => {
-                if !pending.executed {
-                    info!(
-                        "Beginning voice channel haunting for user {user_id} in guild {guild_id}"
-                    );
-
-                    // Get available voice channels in the guild
-                    if let Ok(guild) = guild_id.to_partial_guild(http).await {
-                        if let Ok(member) = guild.member(http, user_id).await {
-                            // Find the user's current voice channel, if any
-                            let current_voice_channel: Option<ChannelId> = Some(ChannelId::new(1));
-
-                            if let Some(voice_channel_id) = current_voice_channel {
-                                // Store the original channel ID if it's not already set
-                                let original_id =
-                                    original_channel_id.unwrap_or(voice_channel_id.get());
-
-                                // Get all voice channels in the guild
-                                let voice_channels = {
-                                    let channels = guild.channels(http).await?;
-                                    channels.iter().filter_map(|(id, channel)| {
-                                        if channel.kind == serenity::all::ChannelType::Voice {
-                                            Some((id, channel))
-                                        } else {
-                                            None
-                                        }
-                                    }).collect::<Vec<_>>()
-                                };
-
-                                if !voice_channels.is_empty() {
-                                    // Create a teleport count if not set (1-3 by default)
-                                    let count = teleport_count.unwrap_or_else(|| {
-                                        let mut rng = rand::thread_rng();
-                                        rand::Rng::gen_range(&mut rng, 1..=3)
-                                    });
-
-                                    // Create a delay between teleports (5-15 seconds by default)
-                                    let delay = interval.unwrap_or_else(|| {
-                                        let mut rng = rand::thread_rng();
-                                        rand::Rng::gen_range(&mut rng, 5..=15)
-                                    });
-
-                                    // Schedule the haunting for later execution
-                                    let http_arc = Arc::new(http);
-                                    let guild_id_copy = guild_id;
-                                    let user_id_copy = user_id;
-                                    let voice_channels_copy = voice_channels.clone();
-                                    let return_to_original = return_to_origin.unwrap_or(true);
-
-                                    tokio::spawn(async move {
-                                        let mut rng = rand::thread_rng();
-
-                                        for i in 0..count {
-                                            // Random voice channel (not the current one)
-                                            let random_channel = loop {
-                                                let idx = rand::Rng::gen_range(
-                                                    &mut rng,
-                                                    0..voice_channels_copy.len(),
-                                                );
-                                                let channel = voice_channels_copy[idx];
-                                                // Ensure we're moving to a different channel
-                                                if i == 0 {
-                                                    if channel.get() != voice_channel_id.get() {
-                                                        break *channel;
-                                                    }
-                                                } else {
-                                                    break *channel;
-                                                }
-                                            };
-
-                                            // Move the user to the random channel
-                                            if let Ok(guild) =
-                                                guild_id_copy.to_partial_guild(&http_arc).await
-                                            {
-                                                if let Ok(mut member) =
-                                                    guild.member(&http_arc, user_id_copy).await
-                                                {
-                                                    info!(
-                                                        "Teleporting user {user_id_copy} to channel {random_channel}"
-                                                    );
-                                                    if let Err(e) = member
-                                                        .edit(
-                                                            &http_arc,
-                                                            serenity::builder::EditMember::new(
-                                                            )
-                                                            .voice_channel(random_channel),
-                                                        )
-                                                        .await
-                                                    {
-                                                        error!(
-                                                            "Failed to teleport user {user_id_copy}: {e}"
-                                                        );
-                                                        break;
-                                                    }
-                                                }
-                                            }
-
-                                            // Wait before the next teleport
-                                            tokio::time::sleep(
-                                                tokio::time::Duration::from_secs(delay),
-                                            )
-                                            .await;
-                                        }
-
-                                        // Return the user to their original channel if specified
-                                        if return_to_original {
-                                            if let Ok(guild) =
-                                                guild_id_copy.to_partial_guild(&http_arc).await
-                                            {
-                                                if let Ok(mut member) =
-                                                    guild.member(&http_arc, user_id_copy).await
-                                                {
-                                                    info!(
-                                                        "Returning user {user_id_copy} to original channel {original_id}"
-                                                    );
-                                                    let original_channel =
-                                                        ChannelId::new(original_id);
-                                                    if let Err(e) = member
-                                                        .edit(
-                                                            &http_arc,
-                                                            serenity::builder::EditMember::new(
-                                                            )
-                                                            .voice_channel(original_channel),
-                                                        )
-                                                        .await
-                                                    {
-                                                        error!(
-                                                            "Failed to return user {user_id_copy} to original channel: {e}"
-                                                        );
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    });
-
-                                    info!(
-                                        "Voice channel haunting scheduled for user {user_id}"
-                                    );
-                                } else {
-                                    error!(
-                                        "No voice channels found in guild {guild_id} for haunting"
-                                    );
-                                }
-                            } else {
-                                error!("User {user_id} is not in a voice channel, cannot haunt");
-                            }
-                        }
-                    }
-                }
-
-                // Mark as executed so it doesn't run again
-                pending.executed = true;
+                handle_voice_channel_haunt_action(
+                    http,
+                    guild_id,
+                    user_id,
+                    teleport_count,
+                    interval,
+                    return_to_origin,
+                    original_channel_id,
+                    is_executed,
+                )
+                .await?;
             }
             EnforcementAction::Ban { duration } => {
-                #[allow(clippy::if_not_else)]
-                if !pending.executed {
-                    // Ban the user
-                    info!("Banning user {user_id} in guild {guild_id} for {duration:?} seconds");
-
-                    // Convert to days for unban scheduling (used later)
-                    let reason =
-                        format!("Temporary ban from warning system for {duration:?} seconds");
-
-                    if let Err(e) = guild_id.ban_with_reason(http, user_id, 7, &reason).await {
-                        error!("Failed to ban user {user_id}: {e}");
-                    } else {
-                        info!("Successfully banned user {user_id}");
-
-                        // The task will auto-update this to executed = true, and we'll schedule the unban
-                        // by creating a new pending enforcement
-                    }
-                } else {
-                    // Unban the user when duration expires
-                    info!("Unbanning user {user_id} in guild {guild_id}");
-                    if let Err(e) = guild_id.unban(http, user_id).await {
-                        error!("Failed to unban user {user_id}: {e}");
-                    } else {
-                        info!("Successfully unbanned user {user_id}");
-                    }
-                }
+                handle_ban_action(http, guild_id, user_id, duration, is_executed).await?;
             }
             EnforcementAction::Kick { delay } => {
-                if delay.is_none() || delay.is_some_and(|d| d == 0) || pending.executed {
-                    // Kick immediately or when the delay expires
-                    info!("Kicking user {user_id} from guild {guild_id}");
-                    if let Ok(guild) = guild_id.to_partial_guild(http).await {
-                        if let Ok(member) = guild.member(http, user_id).await {
-                            let reason = "Kicked by warning system";
-                            if let Err(e) = member.kick_with_reason(http, reason).await {
-                                error!("Failed to kick user {user_id}: {e}");
-                            } else {
-                                info!("Successfully kicked user {user_id}");
-                            }
-                        }
-                    }
-                } else {
-                    // This is a delayed kick that hasn't reached its time yet - do nothing
-                    info!("Delayed kick for user {user_id} is not ready yet");
-                    // Will be handled when execution time is reached
-                    return Ok(());
-                }
+                handle_kick_action(http, guild_id, user_id, delay, is_executed).await?;
             }
             EnforcementAction::VoiceMute { duration } => {
-                #[allow(clippy::match_bool)]
-                match pending.executed {
-                    false => {
-                        // Apply voice mute
-                        info!(
-                            "Voice muting user {user_id} in guild {guild_id} for {duration:?} seconds"
-                        );
-                        if let Ok(guild) = guild_id.to_partial_guild(http).await {
-                            if let Ok(mut member) = guild.member(http, user_id).await {
-                                use poise::serenity_prelude::builder::EditMember;
-
-                                // Apply voice mute
-                                if let Err(e) =
-                                    member.edit(http, EditMember::new().mute(true)).await
-                                {
-                                    error!("Failed to voice mute user {}: {}", user_id, e);
-                                } else {
-                                    info!("Successfully voice muted user {}", user_id);
-
-                                    // If there's a duration, schedule an un-mute task
-                                    if let Some(dur) = duration {
-                                        if *dur > 0 {
-                                            // Mute is active, schedule an unmute task
-                                            // This could be implemented by creating a new enforcement
-                                            // with the executed flag set to true that will unmute when processed
-                                            // But for now we'll rely on manual unmuting
-                                            info!(
-                                                "Voice mute will need to be manually removed after {} seconds",
-                                                dur
-                                            );
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    true => {
-                        // Remove the voice mute
-                        info!("Voice mute period expired for user {user_id} in guild {guild_id}");
-                        if let Ok(guild) = guild_id.to_partial_guild(http).await {
-                            if let Ok(mut member) = guild.member(http, user_id).await {
-                                use poise::serenity_prelude::builder::EditMember;
-
-                                if let Err(e) =
-                                    member.edit(http, EditMember::new().mute(false)).await
-                                {
-                                    error!(
-                                        "Failed to remove voice mute from user {}: {}",
-                                        user_id, e
-                                    );
-                                } else {
-                                    info!("Successfully removed voice mute from user {}", user_id);
-                                }
-                            }
-                        }
-                    }
-                }
+                handle_voice_mute_action(http, guild_id, user_id, duration, is_executed).await?;
             }
             EnforcementAction::VoiceDeafen { duration } => {
-                #[allow(clippy::match_bool)]
-                match pending.executed {
-                    false => {
-                        // Apply voice deafen
-                        info!(
-                            "Voice deafening user {user_id} in guild {guild_id} for {duration:?} seconds"
-                        );
-                        if let Ok(guild) = guild_id.to_partial_guild(http).await {
-                            if let Ok(mut member) = guild.member(http, user_id).await {
-                                use poise::serenity_prelude::builder::EditMember;
-
-                                // Apply voice deafen
-                                if let Err(e) =
-                                    member.edit(http, EditMember::new().deafen(true)).await
-                                {
-                                    error!("Failed to voice deafen user {}: {}", user_id, e);
-                                } else {
-                                    info!("Successfully voice deafened user {}", user_id);
-
-                                    // If there's a duration, schedule an un-deafen task
-                                    if let Some(dur) = duration {
-                                        if *dur > 0 {
-                                            // Deafen is active, scheduling an undeafen would require a separate task
-                                            info!(
-                                                "Voice deafen will need to be manually removed after {} seconds",
-                                                dur
-                                            );
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    true => {
-                        // Remove the voice deafen
-                        info!("Voice deafen period expired for user {user_id} in guild {guild_id}");
-                        if let Ok(guild) = guild_id.to_partial_guild(http).await {
-                            if let Ok(mut member) = guild.member(http, user_id).await {
-                                use poise::serenity_prelude::builder::EditMember;
-
-                                if let Err(e) =
-                                    member.edit(http, EditMember::new().deafen(false)).await
-                                {
-                                    error!(
-                                        "Failed to remove voice deafen from user {}: {}",
-                                        user_id, e
-                                    );
-                                } else {
-                                    info!(
-                                        "Successfully removed voice deafen from user {}",
-                                        user_id
-                                    );
-                                }
-                            }
-                        }
-                    }
-                }
+                handle_voice_deafen_action(http, guild_id, user_id, duration, is_executed).await?;
             }
             EnforcementAction::VoiceDisconnect { delay } => {
-                if delay.is_none() || delay.is_some_and(|d| d == 0) || pending.executed {
-                    // Disconnect immediately or when the delay expires
-                    info!("Disconnecting user {user_id} from voice in guild {guild_id}");
-                    if let Ok(guild) = guild_id.to_partial_guild(http).await {
-                        if let Ok(member) = guild.member(http, user_id).await {
-                            // Disconnect from voice channel
-                            if let Err(e) = member.disconnect_from_voice(http).await {
-                                error!("Failed to disconnect user {} from voice: {}", user_id, e);
-                            } else {
-                                info!("Successfully disconnected user {} from voice", user_id);
-                            }
-                        }
-                    }
-                } else {
-                    // This is a delayed disconnect that hasn't reached its time yet - do nothing
-                    info!("Delayed voice disconnect for user {user_id} is not ready yet");
-                    // Will be handled when execution time is reached
-                    return Ok(());
-                }
+                handle_voice_disconnect_action(http, guild_id, user_id, delay.as_ref(), is_executed).await?;
             }
             EnforcementAction::None => {}
         }
