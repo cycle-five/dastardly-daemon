@@ -255,17 +255,17 @@ pub async fn summon_daemon(
     // Respond to the moderator
     let response = if enforce {
         format!(
-            "Thumbs down recorded for {} with reason: {}. Enforcement action applied due to multiple warnings.",
+            "Summon recorded for {} with reason: {}. Feel my wrath!",
             user.name, reason
         )
     } else if state.warning_timestamps.len() == 1 {
         format!(
-            "First thumbs down recorded for {} with reason: {}. Further warnings may trigger enforcement.",
+            "First summoning recorded for {} with reason: {}. Do not test my patience.",
             user.name, reason
         )
     } else {
         format!(
-            "Thumbs down recorded for {} with reason: {}. Current warning count: {}",
+            "Summon recorded for {} with reason: {}. Current warning count: {}",
             user.name,
             reason,
             state.warning_timestamps.len()
