@@ -335,10 +335,10 @@ impl DataInner {
     /// This method loads guild configurations from a YAML file.
     /// If the file doesn't exist, it returns a new empty Data instance.
     pub async fn load() -> Self {
-        const CONFIG_FILE: &str = "config/bot_config.yaml";
-        const WARNINGS_FILE: &str = "config/warnings.yaml";
-        const ENFORCEMENTS_FILE: &str = "config/enforcements.yaml";
-        const WARNING_STATES_FILE: &str = "config/warning_states.yaml";
+        const CONFIG_FILE: &str = "data/bot_config.yaml";
+        const WARNINGS_FILE: &str = "data/warnings.yaml";
+        const ENFORCEMENTS_FILE: &str = "data/enforcements.yaml";
+        const WARNING_STATES_FILE: &str = "data/warning_states.yaml";
 
         // Create a new empty Data instance
         let data = Self::new();
@@ -401,10 +401,10 @@ impl DataInner {
     /// - The YAML data cannot be written to the config file
     pub async fn save(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         const CONFIG_DIR: &str = "config";
-        const CONFIG_FILE: &str = "config/bot_config.yaml";
-        const WARNINGS_FILE: &str = "config/warnings.yaml";
-        const ENFORCEMENTS_FILE: &str = "config/enforcements.yaml";
-        const WARNING_STATES_FILE: &str = "config/warning_states.yaml";
+        const CONFIG_FILE: &str = "data/bot_config.yaml";
+        const WARNINGS_FILE: &str = "data/warnings.yaml";
+        const ENFORCEMENTS_FILE: &str = "data/enforcements.yaml";
+        const WARNING_STATES_FILE: &str = "data/warning_states.yaml";
 
         // Create the config directory if it doesn't exist
         if !std::path::Path::new(CONFIG_DIR).exists() {
