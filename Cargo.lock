@@ -1650,6 +1650,7 @@ dependencies = [
  "dashmap",
  "mockall",
  "poise",
+ "rand",
  "serde",
  "serde_yaml",
  "serenity",

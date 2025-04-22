@@ -22,6 +22,10 @@ pub struct GuildConfig {
     pub default_notification_method: NotificationMethod,
     // Default enforcement action for warnings
     pub default_enforcement: Option<EnforcementAction>,
+    // Channel for public enforcement logs
+    pub enforcement_log_channel_id: Option<u64>,
+    // Chaos factor for randomness in enforcement decisions (0.0-1.0)
+    pub chaos_factor: f32,
 }
 
 /// Notification method for warnings
@@ -81,6 +85,18 @@ pub struct PendingEnforcement {
     pub action: EnforcementAction,
     pub execute_at: String,
     pub executed: bool,
+}
+
+/// Tracks warning state for a user, used for the weighted warning system
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserWarningState {
+    pub user_id: u64,
+    pub guild_id: u64,
+    pub warning_timestamps: Vec<String>, // Stored as RFC3339 strings
+    pub warning_reasons: Vec<String>,
+    pub mod_issuers: Vec<u64>,
+    pub pending_enforcement: Option<EnforcementAction>,
+    pub last_updated: String, // RFC3339 timestamp
 }
 
 /// Centralized data structure for the bot
@@ -170,6 +186,83 @@ impl Data {
     pub fn get_warning(&self, id: &str) -> Option<Warning> {
         self.0.warnings.get(id).map(|entry| entry.value().clone())
     }
+    
+    /// Get a user's warning state or create a new one if it doesn't exist
+    pub fn get_or_create_user_warning_state(&self, user_id: u64, guild_id: u64) -> UserWarningState {
+        let key = format!("{}:{}", user_id, guild_id);
+        if let Some(state) = self.0.user_warning_states.get(&key) {
+            state.value().clone()
+        } else {
+            UserWarningState {
+                user_id,
+                guild_id,
+                warning_timestamps: Vec::new(),
+                warning_reasons: Vec::new(),
+                mod_issuers: Vec::new(),
+                pending_enforcement: None,
+                last_updated: chrono::Utc::now().to_rfc3339(),
+            }
+        }
+    }
+    
+    /// Add a warning to a user's warning state
+    pub fn add_to_user_warning_state(
+        &self, 
+        user_id: u64, 
+        guild_id: u64,
+        reason: String,
+        issuer_id: u64,
+    ) -> UserWarningState {
+        let key = format!("{}:{}", user_id, guild_id);
+        let timestamp = chrono::Utc::now().to_rfc3339();
+        
+        let mut state = self.get_or_create_user_warning_state(user_id, guild_id);
+        state.warning_timestamps.push(timestamp.clone());
+        state.warning_reasons.push(reason);
+        state.mod_issuers.push(issuer_id);
+        state.last_updated = timestamp;
+        
+        self.0.user_warning_states.insert(key, state.clone());
+        state
+    }
+    
+    /// Calculate a weighted warning score for a user based on recency and mod diversity
+    /// Returns a score from 0.0 to infinity where higher scores mean more warnings
+    pub fn calculate_warning_score(&self, user_id: u64, guild_id: u64) -> f64 {
+        let state = self.get_or_create_user_warning_state(user_id, guild_id);
+        if state.warning_timestamps.is_empty() {
+            return 0.0;
+        }
+        
+        // Constants for the scoring algorithm
+        const DECAY_RATE: f64 = 0.05; // Higher values mean faster decay
+        const MOD_DIVERSITY_BONUS: f64 = 0.5; // Bonus for different mods reporting
+        
+        let now = chrono::Utc::now();
+        let mut total_score = 0.0;
+        let mut unique_mods = std::collections::HashSet::new();
+        
+        // Calculate score for each warning based on recency
+        for (i, timestamp_str) in state.warning_timestamps.iter().enumerate() {
+            if let Ok(timestamp) = chrono::DateTime::parse_from_rfc3339(timestamp_str) {
+                let age_hours = (now - timestamp.with_timezone(&chrono::Utc)).num_seconds() as f64 / 3600.0;
+                let weight = (-DECAY_RATE * age_hours).exp(); // Exponential decay based on age
+                total_score += weight;
+                
+                // Track unique mods who issued warnings
+                if i < state.mod_issuers.len() {
+                    unique_mods.insert(state.mod_issuers[i]);
+                }
+            }
+        }
+        
+        // Apply a bonus if multiple mods issued warnings (more credible reports)
+        if unique_mods.len() > 1 {
+            total_score += MOD_DIVERSITY_BONUS * (unique_mods.len() as f64 - 1.0);
+        }
+        
+        total_score
+    }
 }
 
 /// Main centralized data structure for the bot
@@ -183,6 +276,8 @@ pub struct DataInner {
     pub warnings: DashMap<String, Warning>,
     // Map of enforcement_id -> pending enforcement
     pub pending_enforcements: DashMap<String, PendingEnforcement>,
+    // Map of user_id+guild_id -> user warning state
+    pub user_warning_states: DashMap<String, UserWarningState>,
     // Channel to send enforcement check requests
     pub enforcement_tx: Arc<Option<Sender<EnforcementCheckRequest>>>,
 }
@@ -225,6 +320,7 @@ impl DataInner {
             cache: Arc::new(serenity::Cache::default()),
             warnings: DashMap::new(),
             pending_enforcements: DashMap::new(),
+            user_warning_states: DashMap::new(),
             enforcement_tx: Arc::new(None),
         }
     }
@@ -237,6 +333,7 @@ impl DataInner {
         const CONFIG_FILE: &str = "config/bot_config.yaml";
         const WARNINGS_FILE: &str = "config/warnings.yaml";
         const ENFORCEMENTS_FILE: &str = "config/enforcements.yaml";
+        const WARNING_STATES_FILE: &str = "config/warning_states.yaml";
 
         // Create a new empty Data instance
         let data = Self::new();
@@ -273,6 +370,16 @@ impl DataInner {
             }
         }
 
+        // Load user warning states
+        if let Ok(file_content) = tokio::fs::read_to_string(WARNING_STATES_FILE).await {
+            if let Ok(states) = serde_yaml::from_str::<Vec<UserWarningState>>(&file_content) {
+                for state in states {
+                    let key = format!("{}:{}", state.user_id, state.guild_id);
+                    data.user_warning_states.insert(key, state);
+                }
+            }
+        }
+
         data
     }
 
@@ -292,6 +399,7 @@ impl DataInner {
         const CONFIG_FILE: &str = "config/bot_config.yaml";
         const WARNINGS_FILE: &str = "config/warnings.yaml";
         const ENFORCEMENTS_FILE: &str = "config/enforcements.yaml";
+        const WARNING_STATES_FILE: &str = "config/warning_states.yaml";
 
         // Create the config directory if it doesn't exist
         if !std::path::Path::new(CONFIG_DIR).exists() {
@@ -328,6 +436,15 @@ impl DataInner {
             .collect();
         let enforcements_yaml = serde_yaml::to_string(&enforcements)?;
         tokio::fs::write(ENFORCEMENTS_FILE, enforcements_yaml).await?;
+
+        // Save user warning states
+        let warning_states: Vec<UserWarningState> = self
+            .user_warning_states
+            .iter()
+            .map(|entry| entry.value().clone())
+            .collect();
+        let warning_states_yaml = serde_yaml::to_string(&warning_states)?;
+        tokio::fs::write(WARNING_STATES_FILE, warning_states_yaml).await?;
 
         Ok(())
     }
@@ -379,6 +496,8 @@ mod tests {
             default_enforcement: Some(EnforcementAction::Mute {
                 duration: Some(3600),
             }),
+            enforcement_log_channel_id: Some(54321),
+            chaos_factor: 0.3,
         };
 
         // Test serialization
@@ -422,7 +541,7 @@ mod tests {
         assert!(serialized.contains("user_id: 12345"));
         assert!(serialized.contains("notification_method: PublicWithMention"));
         assert!(serialized.contains("enforcement:"));
-        assert!(serialized.contains("DelayedKick:"));
+        assert!(serialized.contains("Kick"));
 
         let deserialized: Warning =
             serde_yaml::from_str(&serialized).expect("Failed to deserialize");
@@ -435,7 +554,7 @@ mod tests {
         if let Some(EnforcementAction::Kick { delay }) = deserialized.enforcement {
             assert_eq!(delay, Some(86400));
         } else {
-            panic!("Expected DelayedKick enforcement");
+            panic!("Expected Kick enforcement");
         }
     }
 
@@ -457,7 +576,7 @@ mod tests {
         assert!(serialized.contains("id: enf-id"));
         assert!(serialized.contains("warning_id: warn-id"));
         assert!(serialized.contains("executed: false"));
-        assert!(serialized.contains("Ban:"));
+        assert!(serialized.contains("Ban"));
 
         let deserialized: PendingEnforcement =
             serde_yaml::from_str(&serialized).expect("Failed to deserialize");

@@ -64,6 +64,9 @@ async fn async_main() -> Result<(), Error> {
                 commands::ping(),
                 commands::warn(),
                 commands::cancelwarning(),
+                commands::vcthumbsdown(),
+                commands::setenforcementlog(),
+                commands::setchaos(),
             ],
             pre_command: |ctx| {
                 Box::pin(async move {
