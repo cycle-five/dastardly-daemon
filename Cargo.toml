@@ -1,7 +1,12 @@
 [package]
-name = "simp-sniper-rs"
+name = "dastardly-daemon"
 version = "0.1.0"
 edition = "2024"
+description = "A Discord bot for voice channel moderation with an unpredictable daemon personality"
+
+[features]
+default = []
+llm-integration = []
 
 [dependencies]
 dashmap = "5.5.3"

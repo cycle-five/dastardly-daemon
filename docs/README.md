@@ -1,148 +1,58 @@
-# Discord Bot Template in Rust
+# Dastardly Daemon
 
-A robust, modular Discord bot template built with Rust, using Serenity and Poise frameworks.
+A Discord moderation bot with a twist - an unpredictable daemon that moderates voice channels according to its own chaotic whims.
+
+## Overview
+
+Dastardly Daemon is a Discord bot designed to help moderate voice channels with an erratic and unpredictable personality. The daemon can be summoned by moderators to warn users about inappropriate behavior, but the way it dishes out punishments is inconsistent and sometimes random.
 
 ## Features
 
-- **Modular Architecture**: Clean separation of concerns with dedicated modules for commands, event handlers, data management, and logging
-- **Comprehensive Logging**: Structured logging with file and console outputs
-- **Command Framework**: Built on Poise for easy command creation with slash command support
-- **Persistent Data**: Framework for guild-specific configuration storage
-- **Error Handling**: Robust error handling throughout the application
-- **Unit Tests**: Comprehensive test coverage for all modules
+- **🎭 Demonic Personality**: The daemon decides when and how to dish out punishments, sometimes being lenient and other times harsh
+- **🎲 Chaos Factor**: Configure how unpredictable the daemon's behavior will be 
+- **👻 Voice Channel Haunting**: The daemon can teleport users between voice channels randomly
+- **🔮 Configurable Responses**: Custom daemon-themed messages (with optional LLM integration)
+- **⚡ Automatic Enforcement**: After a certain number of warnings, the daemon will take action
 
-## Project Structure
+## Commands
 
-```
-bot-template-rs/
-├── src/
-│   ├── commands.rs    # Bot commands implementation
-│   ├── data.rs        # Data structures and persistence
-│   ├── handlers.rs    # Event handlers for Discord events
-│   ├── logging.rs     # Logging configuration and utilities
-│   └── main.rs        # Application entry point
-├── Cargo.toml         # Project dependencies
-└── README.md          # Project documentation
-```
+| Command | Description |
+|---------|-------------|
+| `/summon_daemon` | Call the daemon to judge a user's voice behavior |
+| `/warn` | Issue a standard warning to a user |
+| `/appease` | Try to convince the daemon to cancel a punishment |
+| `/daemon_altar` | Set the channel where the daemon will send its messages |
+| `/chaos_ritual` | Adjust the daemon's chaos factor (randomness) |
+| `/ping` | Check if the daemon is responsive |
+
+## Enforcement Actions
+
+The daemon has several ways to torment misbehaving users:
+
+- **Voice Mute**: Prevent a user from speaking in voice channels
+- **Voice Deafen**: Prevent a user from hearing others in voice channels
+- **Voice Disconnect**: Forcibly disconnect a user from voice
+- **Voice Channel Haunting**: Teleport a user between random voice channels
+- **Server Mute**: Prevent a user from sending messages in text channels
+- **Ban**: Temporarily ban a user from the server
+- **Kick**: Remove a user from the server
 
 ## Getting Started
 
-### Prerequisites
+1. Invite the bot to your server
+2. Use `/daemon_altar` to set up a log channel
+3. Use `/chaos_ritual` to set the daemon's chaos level (0.0-1.0)
+4. Start moderating with `/summon_daemon` and `/warn`
 
-- Rust (latest stable version)
-- A Discord bot token
+## Daemon Personality
 
-### Installation
+The daemon is:
+- **Unpredictable**: Sometimes harsh, sometimes lenient
+- **Easily Bored**: May change punishments midway through
+- **Playful Tormentor**: Enjoys teleporting users between channels
+- **Easily Distracted**: Sometimes forgets what it was doing
+- **Grudge Holder**: Remembers repeat offenders
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/bot-template-rs.git
-   cd bot-template-rs
-   ```
+## LLM Integration
 
-2. Set up your Discord bot token:
-   ```bash
-   export DISCORD_TOKEN=your_token_here
-   ```
-
-3. Build and run the bot:
-   ```bash
-   cargo run
-   ```
-
-## Usage
-
-### Adding Commands
-
-Add new commands in `commands.rs`:
-
-```rust
-/// Example command that returns the current time
-#[command(prefix_command, slash_command)]
-pub async fn time(ctx: Context<'_, Data, Error>) -> Result<(), Error> {
-    let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
-    ctx.say(format!("The current time is: {}", now)).await?;
-    Ok(())
-}
-```
-
-Then register the command in `main.rs`:
-
-```rust
-commands: vec![
-    commands::ping(),
-    commands::time(),  // Add your new command here
-],
-```
-
-### Event Handling
-
-The bot includes handlers for common events:
-
-- `ready`: Called when the bot connects to Discord
-- `cache_ready`: Called when the cache is fully populated with guild information
-
-Add custom event handlers in `handlers.rs` by extending the `EventHandler` implementation.
-
-### Data Management
-
-The `Data` struct in `data.rs` provides a centralized data store for your bot. It includes:
-
-- Guild-specific configurations
-- Cache access
-
-Extend the `GuildConfig` struct to store additional guild-specific settings.
-
-## Logging
-
-The bot uses the `tracing` crate for structured logging:
-
-- Console output for development
-- JSON file output for production
-- Separate log files for commands and events
-- Daily log rotation
-
-Logs are stored in the `logs/` directory.
-
-## Testing
-
-Run the test suite with:
-
-```bash
-cargo test
-```
-
-The project includes unit tests for all modules:
-
-- `handlers.rs`: Tests for event handlers
-- `commands.rs`: Tests for command definitions
-- `data.rs`: Tests for data structures and serialization
-- `logging.rs`: Tests for logging functionality
-
-## Extending the Bot
-
-### Adding New Features
-
-1. **New Command Category**: Create a new module in `src/` and register it in `main.rs`
-2. **Custom Events**: Add new event handlers in `handlers.rs`
-3. **Additional Data**: Extend the `Data` and `GuildConfig` structs in `data.rs`
-
-### Deployment
-
-For production deployment:
-
-1. Build in release mode:
-   ```bash
-   cargo build --release
-   ```
-
-2. Set up environment variables or a `.env` file for configuration
-3. Use a process manager like systemd or Docker for running the bot
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
+Optionally, the daemon can be connected to an LLM to generate more creative and dynamic responses to situations. This is controlled by the `llm-integration` feature flag.

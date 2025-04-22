@@ -18,7 +18,7 @@ pub async fn ping(ctx: Context<'_, Data, Error>) -> Result<(), Error> {
     Ok(())
 }
 
-/// Give a "thumbs down" to a user in voice chat for inappropriate behavior
+/// Summon the daemon to judge a user's voice behavior
 #[command(
     slash_command,
     ephemeral,
@@ -27,7 +27,7 @@ pub async fn ping(ctx: Context<'_, Data, Error>) -> Result<(), Error> {
     required_bot_permissions = "KICK_MEMBERS|BAN_MEMBERS|MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS",
     default_member_permissions = "KICK_MEMBERS|BAN_MEMBERS|MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS"
 )]
-pub async fn vcthumbsdown(
+pub async fn summon_daemon(
     ctx: Context<'_, Data, Error>,
     #[description = "User to warn"] user: User,
     #[description = "Reason for warning"] reason: String,
@@ -133,6 +133,23 @@ pub async fn vcthumbsdown(
                     }
                     EnforcementAction::Kick { .. } => "Kick".to_string(),
                     EnforcementAction::None => "No action".to_string(),
+                    EnforcementAction::VoiceChannelHaunt {
+                        teleport_count,
+                        interval,
+                        return_to_origin,
+                        ..
+                    } => {
+                        format!(
+                            "Voice channel haunting: {} teleports over {} seconds{}",
+                            teleport_count.unwrap_or(3),
+                            interval.unwrap_or(10),
+                            if return_to_origin.unwrap_or(true) {
+                                " (with return)"
+                            } else {
+                                " (no return)"
+                            }
+                        )
+                    }
                 };
 
                 embed = embed.field(
@@ -197,6 +214,9 @@ pub async fn vcthumbsdown(
                 EnforcementAction::Kick { delay }
                 | EnforcementAction::VoiceDisconnect { delay } => {
                     chrono::Utc::now() + chrono::Duration::seconds(delay.unwrap_or(0) as i64)
+                }
+                EnforcementAction::VoiceChannelHaunt { interval, .. } => {
+                    chrono::Utc::now() + chrono::Duration::seconds(interval.unwrap_or(0) as i64)
                 }
                 EnforcementAction::None => chrono::Utc::now(),
             };
@@ -345,6 +365,9 @@ pub async fn warn(
             EnforcementAction::Kick { delay } | EnforcementAction::VoiceDisconnect { delay } => {
                 Utc::now() + Duration::seconds(delay.unwrap_or(0) as i64)
             }
+            EnforcementAction::VoiceChannelHaunt { interval, .. } => {
+                Utc::now() + Duration::seconds(interval.unwrap_or(0) as i64)
+            }
             EnforcementAction::None => unreachable!(),
         };
 
@@ -454,7 +477,9 @@ pub async fn warn(
             | EnforcementAction::Ban { duration } => {
                 duration.is_none() || duration.is_some_and(|d| d == 0)
             }
-
+            EnforcementAction::VoiceChannelHaunt { interval, .. } => {
+                interval.is_none() || interval.is_some_and(|d| d == 0)
+            }
             EnforcementAction::None => false,
         };
 
@@ -488,14 +513,14 @@ pub async fn warn(
     Ok(())
 }
 
-/// Set the channel for enforcement logs
+/// Set the altar where the daemon will send its messages
 #[command(
     slash_command,
     guild_only,
     ephemeral,
     required_permissions = "ADMINISTRATOR"
 )]
-pub async fn setenforcementlog(
+pub async fn daemon_altar(
     ctx: Context<'_, Data, Error>,
     #[description = "Channel to use for enforcement logs"] channel: serenity::Channel,
 ) -> Result<(), Error> {
@@ -558,14 +583,14 @@ pub async fn setenforcementlog(
     Ok(())
 }
 
-/// Set chaos factor for randomness in enforcement decisions
+/// Perform a ritual to adjust the daemon's chaos level
 #[command(
     slash_command,
     guild_only,
     ephemeral,
     required_permissions = "ADMINISTRATOR"
 )]
-pub async fn setchaos(
+pub async fn chaos_ritual(
     ctx: Context<'_, Data, Error>,
     #[description = "Chaos factor (0.0-1.0) where higher means more random"] factor: f32,
 ) -> Result<(), Error> {
@@ -616,14 +641,14 @@ pub async fn setchaos(
     Ok(())
 }
 
-/// Cancel a pending enforcement action
+/// Appease the daemon to cancel a pending punishment
 #[command(
     slash_command,
     guild_only,
     ephemeral,
     required_permissions = "ADMINISTRATOR"
 )]
-pub async fn cancelwarning(
+pub async fn appease(
     ctx: Context<'_, Data, Error>,
     #[description = "User whose enforcement to cancel"] user: User,
     #[description = "Specific enforcement ID to cancel (optional)"] enforcement_id: Option<String>,

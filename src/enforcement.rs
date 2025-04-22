@@ -2,6 +2,7 @@ use crate::data::EnforcementAction;
 use crate::{Data, Error};
 use chrono::{DateTime, Utc};
 use poise::serenity_prelude::{GuildId, Http, UserId};
+use serenity::all::ChannelId;
 use std::sync::Arc;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::time::Duration;
@@ -271,6 +272,168 @@ async fn execute_enforcement(http: &Http, data: &Data, enforcement_id: &str) -> 
                         info!("Mute period expired for user {user_id} in guild {guild_id}");
                     }
                 }
+            }
+            EnforcementAction::VoiceChannelHaunt {
+                teleport_count,
+                interval,
+                return_to_origin,
+                original_channel_id,
+            } => {
+                if !pending.executed {
+                    info!(
+                        "Beginning voice channel haunting for user {user_id} in guild {guild_id}"
+                    );
+
+                    // Get available voice channels in the guild
+                    if let Ok(guild) = guild_id.to_partial_guild(http).await {
+                        if let Ok(member) = guild.member(http, user_id).await {
+                            // Find the user's current voice channel, if any
+                            let current_voice_channel: Option<ChannelId> = Some(ChannelId::new(1));
+
+                            if let Some(voice_channel_id) = current_voice_channel {
+                                // Store the original channel ID if it's not already set
+                                let original_id =
+                                    original_channel_id.unwrap_or(voice_channel_id.get());
+
+                                // Get all voice channels in the guild
+                                let channels = guild.channels(http).await;
+                                if let Ok(channels) = channels {
+                                    // Filter for voice channels only
+                                    let voice_channels: Vec<_> = channels
+                                        .iter()
+                                        .filter_map(|(id, channel)| {
+                                            if channel.kind == serenity::all::ChannelType::Voice {
+                                                Some(id)
+                                            } else {
+                                                None
+                                            }
+                                        })
+                                        .collect();
+
+                                    if !voice_channels.is_empty() {
+                                        // Create a teleport count if not set (1-3 by default)
+                                        let count = teleport_count.unwrap_or_else(|| {
+                                            let mut rng = rand::thread_rng();
+                                            rand::Rng::gen_range(&mut rng, 1..=3)
+                                        });
+
+                                        // Create a delay between teleports (5-15 seconds by default)
+                                        let delay = interval.unwrap_or_else(|| {
+                                            let mut rng = rand::thread_rng();
+                                            rand::Rng::gen_range(&mut rng, 5..=15)
+                                        });
+
+                                        // Schedule the haunting for later execution
+                                        let http_arc = Arc::new(http);
+                                        let guild_id_copy = guild_id;
+                                        let user_id_copy = user_id;
+                                        let voice_channels_copy = voice_channels.clone();
+                                        let return_to_original = return_to_origin.unwrap_or(true);
+
+                                        tokio::spawn(async move {
+                                            let mut rng = rand::thread_rng();
+
+                                            for i in 0..count {
+                                                // Random voice channel (not the current one)
+                                                let random_channel = loop {
+                                                    let idx = rand::Rng::gen_range(
+                                                        &mut rng,
+                                                        0..voice_channels_copy.len(),
+                                                    );
+                                                    let channel = voice_channels_copy[idx];
+                                                    // Ensure we're moving to a different channel
+                                                    if i == 0 {
+                                                        if channel.get() != voice_channel_id.get() {
+                                                            break *channel;
+                                                        }
+                                                    } else {
+                                                        break *channel;
+                                                    }
+                                                };
+
+                                                // Move the user to the random channel
+                                                if let Ok(guild) =
+                                                    guild_id_copy.to_partial_guild(&http_arc).await
+                                                {
+                                                    if let Ok(mut member) =
+                                                        guild.member(&http_arc, user_id_copy).await
+                                                    {
+                                                        info!(
+                                                            "Teleporting user {user_id_copy} to channel {random_channel}"
+                                                        );
+                                                        if let Err(e) = member
+                                                            .edit(
+                                                                &http_arc,
+                                                                serenity::builder::EditMember::new(
+                                                                )
+                                                                .voice_channel(random_channel),
+                                                            )
+                                                            .await
+                                                        {
+                                                            error!(
+                                                                "Failed to teleport user {user_id_copy}: {e}"
+                                                            );
+                                                            break;
+                                                        }
+                                                    }
+                                                }
+
+                                                // Wait before the next teleport
+                                                tokio::time::sleep(
+                                                    tokio::time::Duration::from_secs(delay),
+                                                )
+                                                .await;
+                                            }
+
+                                            // Return the user to their original channel if specified
+                                            if return_to_original {
+                                                if let Ok(guild) =
+                                                    guild_id_copy.to_partial_guild(&http_arc).await
+                                                {
+                                                    if let Ok(mut member) =
+                                                        guild.member(&http_arc, user_id_copy).await
+                                                    {
+                                                        info!(
+                                                            "Returning user {user_id_copy} to original channel {original_id}"
+                                                        );
+                                                        let original_channel =
+                                                            ChannelId::new(original_id);
+                                                        if let Err(e) = member
+                                                            .edit(
+                                                                &http_arc,
+                                                                serenity::builder::EditMember::new(
+                                                                )
+                                                                .voice_channel(original_channel),
+                                                            )
+                                                            .await
+                                                        {
+                                                            error!(
+                                                                "Failed to return user {user_id_copy} to original channel: {e}"
+                                                            );
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        });
+
+                                        info!(
+                                            "Voice channel haunting scheduled for user {user_id}"
+                                        );
+                                    } else {
+                                        error!(
+                                            "No voice channels found in guild {guild_id} for haunting"
+                                        );
+                                    }
+                                }
+                            } else {
+                                error!("User {user_id} is not in a voice channel, cannot haunt");
+                            }
+                        }
+                    }
+                }
+
+                // Mark as executed so it doesn't run again
+                pending.executed = true;
             }
             EnforcementAction::Ban { duration } => {
                 #[allow(clippy::if_not_else)]

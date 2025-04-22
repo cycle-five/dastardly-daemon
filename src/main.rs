@@ -2,6 +2,7 @@ mod commands;
 mod data;
 mod enforcement;
 mod handlers;
+mod llm;
 mod logging;
 
 use std::env;
@@ -11,11 +12,11 @@ use serenity::GatewayIntents;
 use tracing::{error, info};
 
 // Customize these constants for your bot
-pub const BOT_NAME: &str = "simp_sniper_rs";
-pub const COMMAND_TARGET: &str = "simp_sniper_rs::command";
-pub const ERROR_TARGET: &str = "simp_sniper_rs::error";
-pub const EVENT_TARGET: &str = "simp_sniper_rs::handlers";
-pub const CONSOLE_TARGET: &str = "simp_sniper_rs";
+pub const BOT_NAME: &str = "dastardly_daemon";
+pub const COMMAND_TARGET: &str = "dastardly_daemon::command";
+pub const ERROR_TARGET: &str = "dastardly_daemon::error";
+pub const EVENT_TARGET: &str = "dastardly_daemon::handlers";
+pub const CONSOLE_TARGET: &str = "dastardly_daemon";
 pub use data::{Data, DataInner};
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
@@ -63,10 +64,10 @@ async fn async_main() -> Result<(), Error> {
                 // Register commands from commands module
                 commands::ping(),
                 commands::warn(),
-                commands::cancelwarning(),
-                commands::vcthumbsdown(),
-                commands::setenforcementlog(),
-                commands::setchaos(),
+                commands::appease(),      // renamed from cancelwarning
+                commands::summon_daemon(), // renamed from vcthumbsdown
+                commands::daemon_altar(),  // renamed from setenforcementlog
+                commands::chaos_ritual(),  // renamed from setchaos
             ],
             pre_command: |ctx| {
                 Box::pin(async move {

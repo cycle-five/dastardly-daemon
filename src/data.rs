@@ -60,6 +60,17 @@ pub enum EnforcementAction {
     VoiceDisconnect {
         delay: Option<u64>,
     },
+    // Daemon specialized punishments
+    VoiceChannelHaunt {
+        /// Number of times to teleport the user between channels
+        teleport_count: Option<u64>,
+        /// Seconds between each teleport
+        interval: Option<u64>,
+        /// Whether to eventually return the user to their original channel
+        return_to_origin: Option<bool>,
+        /// Original voice channel ID to potentially return to
+        original_channel_id: Option<u64>,
+    },
 }
 
 /// Represents a warning issued to a user

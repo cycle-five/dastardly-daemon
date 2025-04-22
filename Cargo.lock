@@ -326,6 +326,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "dastardly-daemon"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "dashmap",
+ "mockall",
+ "poise",
+ "rand",
+ "serde",
+ "serde_yaml",
+ "serenity",
+ "tokio",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "data-encoding"
 version = "2.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1640,25 +1659,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a9e9e0b4211b72e7b8b6e85c807d36c212bdb33ea8587f7569562a84df5465b1"
 dependencies = [
  "libc",
-]
-
-[[package]]
-name = "simp-sniper-rs"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "dashmap",
- "mockall",
- "poise",
- "rand",
- "serde",
- "serde_yaml",
- "serenity",
- "tokio",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
- "uuid",
 ]
 
 [[package]]
