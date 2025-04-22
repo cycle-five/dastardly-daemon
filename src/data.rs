@@ -186,9 +186,13 @@ impl Data {
     pub fn get_warning(&self, id: &str) -> Option<Warning> {
         self.0.warnings.get(id).map(|entry| entry.value().clone())
     }
-    
+
     /// Get a user's warning state or create a new one if it doesn't exist
-    pub fn get_or_create_user_warning_state(&self, user_id: u64, guild_id: u64) -> UserWarningState {
+    pub fn get_or_create_user_warning_state(
+        &self,
+        user_id: u64,
+        guild_id: u64,
+    ) -> UserWarningState {
         let key = format!("{}:{}", user_id, guild_id);
         if let Some(state) = self.0.user_warning_states.get(&key) {
             state.value().clone()
@@ -204,28 +208,28 @@ impl Data {
             }
         }
     }
-    
+
     /// Add a warning to a user's warning state
     pub fn add_to_user_warning_state(
-        &self, 
-        user_id: u64, 
+        &self,
+        user_id: u64,
         guild_id: u64,
         reason: String,
         issuer_id: u64,
     ) -> UserWarningState {
         let key = format!("{}:{}", user_id, guild_id);
         let timestamp = chrono::Utc::now().to_rfc3339();
-        
+
         let mut state = self.get_or_create_user_warning_state(user_id, guild_id);
         state.warning_timestamps.push(timestamp.clone());
         state.warning_reasons.push(reason);
         state.mod_issuers.push(issuer_id);
         state.last_updated = timestamp;
-        
+
         self.0.user_warning_states.insert(key, state.clone());
         state
     }
-    
+
     /// Calculate a weighted warning score for a user based on recency and mod diversity
     /// Returns a score from 0.0 to infinity where higher scores mean more warnings
     pub fn calculate_warning_score(&self, user_id: u64, guild_id: u64) -> f64 {
@@ -233,34 +237,35 @@ impl Data {
         if state.warning_timestamps.is_empty() {
             return 0.0;
         }
-        
+
         // Constants for the scoring algorithm
         const DECAY_RATE: f64 = 0.05; // Higher values mean faster decay
         const MOD_DIVERSITY_BONUS: f64 = 0.5; // Bonus for different mods reporting
-        
+
         let now = chrono::Utc::now();
         let mut total_score = 0.0;
         let mut unique_mods = std::collections::HashSet::new();
-        
+
         // Calculate score for each warning based on recency
         for (i, timestamp_str) in state.warning_timestamps.iter().enumerate() {
             if let Ok(timestamp) = chrono::DateTime::parse_from_rfc3339(timestamp_str) {
-                let age_hours = (now - timestamp.with_timezone(&chrono::Utc)).num_seconds() as f64 / 3600.0;
+                let age_hours =
+                    (now - timestamp.with_timezone(&chrono::Utc)).num_seconds() as f64 / 3600.0;
                 let weight = (-DECAY_RATE * age_hours).exp(); // Exponential decay based on age
                 total_score += weight;
-                
+
                 // Track unique mods who issued warnings
                 if i < state.mod_issuers.len() {
                     unique_mods.insert(state.mod_issuers[i]);
                 }
             }
         }
-        
+
         // Apply a bonus if multiple mods issued warnings (more credible reports)
         if unique_mods.len() > 1 {
             total_score += MOD_DIVERSITY_BONUS * (unique_mods.len() as f64 - 1.0);
         }
-        
+
         total_score
     }
 }

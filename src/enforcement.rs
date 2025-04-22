@@ -259,7 +259,9 @@ async fn execute_enforcement(http: &Http, data: &Data, enforcement_id: &str) -> 
                                 {
                                     error!("Failed to mute user {user_id}: {e}");
                                 } else {
-                                    info!("Successfully muted user {user_id} until {timeout_until}");
+                                    info!(
+                                        "Successfully muted user {user_id} until {timeout_until}"
+                                    );
                                 }
                             }
                         }
@@ -324,17 +326,21 @@ async fn execute_enforcement(http: &Http, data: &Data, enforcement_id: &str) -> 
                 match pending.executed {
                     false => {
                         // Apply voice mute
-                        info!("Voice muting user {user_id} in guild {guild_id} for {duration:?} seconds");
+                        info!(
+                            "Voice muting user {user_id} in guild {guild_id} for {duration:?} seconds"
+                        );
                         if let Ok(guild) = guild_id.to_partial_guild(http).await {
                             if let Ok(mut member) = guild.member(http, user_id).await {
                                 use poise::serenity_prelude::builder::EditMember;
-                                
+
                                 // Apply voice mute
-                                if let Err(e) = member.edit(http, EditMember::new().mute(true)).await {
+                                if let Err(e) =
+                                    member.edit(http, EditMember::new().mute(true)).await
+                                {
                                     error!("Failed to voice mute user {}: {}", user_id, e);
                                 } else {
                                     info!("Successfully voice muted user {}", user_id);
-                                    
+
                                     // If there's a duration, schedule an un-mute task
                                     if let Some(dur) = duration {
                                         if *dur > 0 {
@@ -342,7 +348,10 @@ async fn execute_enforcement(http: &Http, data: &Data, enforcement_id: &str) -> 
                                             // This could be implemented by creating a new enforcement
                                             // with the executed flag set to true that will unmute when processed
                                             // But for now we'll rely on manual unmuting
-                                            info!("Voice mute will need to be manually removed after {} seconds", dur);
+                                            info!(
+                                                "Voice mute will need to be manually removed after {} seconds",
+                                                dur
+                                            );
                                         }
                                     }
                                 }
@@ -355,9 +364,14 @@ async fn execute_enforcement(http: &Http, data: &Data, enforcement_id: &str) -> 
                         if let Ok(guild) = guild_id.to_partial_guild(http).await {
                             if let Ok(mut member) = guild.member(http, user_id).await {
                                 use poise::serenity_prelude::builder::EditMember;
-                                
-                                if let Err(e) = member.edit(http, EditMember::new().mute(false)).await {
-                                    error!("Failed to remove voice mute from user {}: {}", user_id, e);
+
+                                if let Err(e) =
+                                    member.edit(http, EditMember::new().mute(false)).await
+                                {
+                                    error!(
+                                        "Failed to remove voice mute from user {}: {}",
+                                        user_id, e
+                                    );
                                 } else {
                                     info!("Successfully removed voice mute from user {}", user_id);
                                 }
@@ -371,22 +385,29 @@ async fn execute_enforcement(http: &Http, data: &Data, enforcement_id: &str) -> 
                 match pending.executed {
                     false => {
                         // Apply voice deafen
-                        info!("Voice deafening user {user_id} in guild {guild_id} for {duration:?} seconds");
+                        info!(
+                            "Voice deafening user {user_id} in guild {guild_id} for {duration:?} seconds"
+                        );
                         if let Ok(guild) = guild_id.to_partial_guild(http).await {
                             if let Ok(mut member) = guild.member(http, user_id).await {
                                 use poise::serenity_prelude::builder::EditMember;
-                                
+
                                 // Apply voice deafen
-                                if let Err(e) = member.edit(http, EditMember::new().deafen(true)).await {
+                                if let Err(e) =
+                                    member.edit(http, EditMember::new().deafen(true)).await
+                                {
                                     error!("Failed to voice deafen user {}: {}", user_id, e);
                                 } else {
                                     info!("Successfully voice deafened user {}", user_id);
-                                    
+
                                     // If there's a duration, schedule an un-deafen task
                                     if let Some(dur) = duration {
                                         if *dur > 0 {
                                             // Deafen is active, scheduling an undeafen would require a separate task
-                                            info!("Voice deafen will need to be manually removed after {} seconds", dur);
+                                            info!(
+                                                "Voice deafen will need to be manually removed after {} seconds",
+                                                dur
+                                            );
                                         }
                                     }
                                 }
@@ -399,11 +420,19 @@ async fn execute_enforcement(http: &Http, data: &Data, enforcement_id: &str) -> 
                         if let Ok(guild) = guild_id.to_partial_guild(http).await {
                             if let Ok(mut member) = guild.member(http, user_id).await {
                                 use poise::serenity_prelude::builder::EditMember;
-                                
-                                if let Err(e) = member.edit(http, EditMember::new().deafen(false)).await {
-                                    error!("Failed to remove voice deafen from user {}: {}", user_id, e);
+
+                                if let Err(e) =
+                                    member.edit(http, EditMember::new().deafen(false)).await
+                                {
+                                    error!(
+                                        "Failed to remove voice deafen from user {}: {}",
+                                        user_id, e
+                                    );
                                 } else {
-                                    info!("Successfully removed voice deafen from user {}", user_id);
+                                    info!(
+                                        "Successfully removed voice deafen from user {}",
+                                        user_id
+                                    );
                                 }
                             }
                         }
