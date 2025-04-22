@@ -528,12 +528,9 @@ async fn handle_voice_channel_haunt_action(
     // Find the user's current voice channel
     let current_voice_channel = get_user_voice_channel(http, guild_id, user_id);
 
-    let voice_channel_id = match current_voice_channel {
-        Some(id) => id,
-        None => {
-            error!("User {user_id} is not in a voice channel, cannot haunt");
-            return Ok(());
-        }
+    let voice_channel_id = if let Some(id) = current_voice_channel { id } else { 
+        error!("User {user_id} is not in a voice channel, cannot haunt");
+        return Ok(());
     };
 
     // Store the original channel ID if it's not already set
