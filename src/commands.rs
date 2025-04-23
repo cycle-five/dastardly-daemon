@@ -88,87 +88,7 @@ pub async fn summon_daemon(
 
     // Notify the user via the enforcement log channel
     if let Some(log_channel_id) = guild_config.enforcement_log_channel_id {
-        let channel_id = serenity::ChannelId::new(log_channel_id);
-        let user_mention = user.mention();
-        let mod_mention = ctx.author().mention();
-
-        let warning_count = state.warning_timestamps.len();
-
-        let mut embed = serenity::CreateEmbed::new()
-            .title("⚠️ Voice Channel Warning")
-            .description(format!(
-                "{} has received a voice channel warning",
-                user_mention
-            ))
-            .field("Reason", &reason, false)
-            .field("Issued By", mod_mention.to_string(), true)
-            .field("Total Warnings", warning_count.to_string(), true)
-            .colour(serenity::Colour::GOLD)
-            .timestamp(serenity::Timestamp::now());
-
-        // If this might lead to enforcement, indicate that
-        if let Some(ref action) = enforcement_action {
-            if state.warning_timestamps.len() == 1 {
-                // This is the first warning, indicate what will happen
-                let action_desc = match action {
-                    EnforcementAction::VoiceMute { duration } => {
-                        format!("Voice mute for {} seconds", duration.unwrap_or(300))
-                    }
-                    EnforcementAction::VoiceDeafen { duration } => {
-                        format!("Voice deafen for {} seconds", duration.unwrap_or(300))
-                    }
-                    EnforcementAction::VoiceDisconnect { .. } => "Voice disconnect".to_string(),
-                    EnforcementAction::Mute { duration } => {
-                        format!("Server mute for {} seconds", duration.unwrap_or(300))
-                    }
-                    EnforcementAction::Ban { duration } => {
-                        format!("Ban for {} seconds", duration.unwrap_or(86400))
-                    }
-                    EnforcementAction::Kick { .. } => "Kick".to_string(),
-                    EnforcementAction::None => "No action".to_string(),
-                    EnforcementAction::VoiceChannelHaunt {
-                        teleport_count,
-                        interval,
-                        return_to_origin,
-                        ..
-                    } => {
-                        format!(
-                            "Voice channel haunting: {} teleports over {} seconds{}",
-                            teleport_count.unwrap_or(3),
-                            interval.unwrap_or(10),
-                            if return_to_origin.unwrap_or(true) {
-                                " (with return)"
-                            } else {
-                                " (no return)"
-                            }
-                        )
-                    }
-                };
-
-                embed = embed.field(
-                    "🚨 If behavior continues:",
-                    format!(
-                        "After ~{} more warnings, the user will receive: **{}**",
-                        WARNING_THRESHOLD as u32 - 1,
-                        action_desc
-                    ),
-                    false,
-                );
-            } else if enforce {
-                // Enforcement is happening now
-                embed = embed
-                    .title("🚫 Voice Channel Enforcement")
-                    .colour(serenity::Colour::RED)
-                    .field(
-                        "⚠️ Threshold Reached",
-                        "Enforcement action is being applied",
-                        false,
-                    );
-            }
-        }
-
-        let message = serenity::CreateMessage::new().embed(embed);
-        let _ = channel_id.send_message(&ctx.http(), message).await;
+        log_voice_warning(&ctx, log_channel_id, &user, &reason, &state, &enforcement_action, enforce).await;
     }
 
     // If enforcing, create the enforcement
@@ -493,7 +413,7 @@ pub async fn chaos_ritual(
     ctx.data().guild_configs.insert(guild_id, guild_config);
 
     // Save data
-    if let Err(e) = save_data(&ctx, "setting chaos factor").await {
+    if let Err(_) = save_data(&ctx, "setting chaos factor").await {
         ctx.say("Failed to save configuration. Check logs for details.")
             .await?;
         return Ok(());
@@ -579,6 +499,102 @@ pub async fn appease(
 }
 
 /// Helper functions for commands
+
+/// Logs a voice channel warning/enforcement to the guild's log channel
+async fn log_voice_warning(
+    ctx: &Context<'_, Data, Error>,
+    log_channel_id: u64,
+    user: &User,
+    reason: &str,
+    state: &crate::data::UserWarningState,
+    enforcement_action: &Option<EnforcementAction>,
+    enforce: bool,
+) {
+    let channel_id = serenity::ChannelId::new(log_channel_id);
+    let user_mention = user.mention();
+    let mod_mention = ctx.author().mention();
+
+    let warning_count = state.warning_timestamps.len();
+
+    let mut embed = serenity::CreateEmbed::new()
+        .title("⚠️ Voice Channel Warning")
+        .description(format!(
+            "{} has received a voice channel warning",
+            user_mention
+        ))
+        .field("Reason", reason, false)
+        .field("Issued By", mod_mention.to_string(), true)
+        .field("Total Warnings", warning_count.to_string(), true)
+        .colour(serenity::Colour::GOLD)
+        .timestamp(serenity::Timestamp::now());
+
+    // If this might lead to enforcement, indicate that
+    if let Some(action) = enforcement_action {
+        if state.warning_timestamps.len() == 1 {
+            // This is the first warning, indicate what will happen
+            let action_desc = match action {
+                EnforcementAction::VoiceMute { duration } => {
+                    format!("Voice mute for {} seconds", duration.unwrap_or(300))
+                }
+                EnforcementAction::VoiceDeafen { duration } => {
+                    format!("Voice deafen for {} seconds", duration.unwrap_or(300))
+                }
+                EnforcementAction::VoiceDisconnect { .. } => "Voice disconnect".to_string(),
+                EnforcementAction::Mute { duration } => {
+                    format!("Server mute for {} seconds", duration.unwrap_or(300))
+                }
+                EnforcementAction::Ban { duration } => {
+                    format!("Ban for {} seconds", duration.unwrap_or(86400))
+                }
+                EnforcementAction::Kick { .. } => "Kick".to_string(),
+                EnforcementAction::None => "No action".to_string(),
+                EnforcementAction::VoiceChannelHaunt {
+                    teleport_count,
+                    interval,
+                    return_to_origin,
+                    ..
+                } => {
+                    format!(
+                        "Voice channel haunting: {} teleports over {} seconds{}",
+                        teleport_count.unwrap_or(3),
+                        interval.unwrap_or(10),
+                        if return_to_origin.unwrap_or(true) {
+                            " (with return)"
+                        } else {
+                            " (no return)"
+                        }
+                    )
+                }
+            };
+
+            // Threshold is 3.0 (roughly 3 recent warnings)
+            const WARNING_THRESHOLD: f64 = 3.0;
+
+            embed = embed.field(
+                "🚨 If behavior continues:",
+                format!(
+                    "After ~{} more warnings, the user will receive: **{}**",
+                    WARNING_THRESHOLD as u32 - 1,
+                    action_desc
+                ),
+                false,
+            );
+        } else if enforce {
+            // Enforcement is happening now
+            embed = embed
+                .title("🚫 Voice Channel Enforcement")
+                .colour(serenity::Colour::RED)
+                .field(
+                    "⚠️ Threshold Reached",
+                    "Enforcement action is being applied",
+                    false,
+                );
+        }
+    }
+
+    let message = serenity::CreateMessage::new().embed(embed);
+    let _ = channel_id.send_message(&ctx.http(), message).await;
+}
 
 /// Retrieves the guild configuration or creates a default one
 fn get_guild_config(ctx: &Context<'_, Data, Error>, guild_id: serenity::GuildId) -> GuildConfig {
