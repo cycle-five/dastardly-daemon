@@ -9,6 +9,11 @@ use poise::serenity_prelude::{Colour, CreateEmbed, CreateMessage, Mentionable, T
 use poise::{Context, command};
 use tracing::{error, info, warn};
 use uuid::Uuid;
+// Determine if enforcement should be triggered
+// Threshold is 2.0 (roughly 2 recent warnings)
+const WARNING_THRESHOLD: f64 = 2.0;
+
+
 
 /// Basic ping command
 /// This command is used to check if the bot is responsive.
@@ -49,10 +54,6 @@ pub async fn summon_daemon(
 
     // Calculate the warning score
     let score = ctx.data().calculate_warning_score(user_id, guild_id.get());
-
-    // Determine if enforcement should be triggered
-    // Threshold is 3.0 (roughly 3 recent warnings)
-    const WARNING_THRESHOLD: f64 = 3.0;
 
     // Add randomness based on the chaos factor
     let random_factor: f64 = {
@@ -567,9 +568,6 @@ async fn log_voice_warning(
                 }
             };
 
-            // Threshold is 3.0 (roughly 3 recent warnings)
-            const WARNING_THRESHOLD: f64 = 3.0;
-
             embed = embed.field(
                 "🚨 If behavior continues:",
                 format!(
@@ -601,7 +599,6 @@ fn get_guild_config(ctx: &Context<'_, Data, Error>, guild_id: serenity::GuildId)
     ctx.data().guild_configs.get(&guild_id).map_or_else(
         || GuildConfig {
             guild_id: guild_id.get(),
-            chaos_factor: 0.3, // Default for summon_daemon
             ..Default::default()
         },
         |entry| entry.clone(),

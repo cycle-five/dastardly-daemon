@@ -1,6 +1,5 @@
 use std::{
-    ops::{Deref, DerefMut},
-    sync::Arc,
+    default::Default, ops::{Deref, DerefMut}, sync::Arc
 };
 
 use crate::enforcement::EnforcementCheckRequest;
@@ -11,7 +10,7 @@ use serenity::prelude::TypeMapKey;
 use tokio::sync::mpsc::Sender;
 
 /// Guild configuration structure.
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GuildConfig {
     // The ID of the guild
     pub guild_id: u64,
@@ -26,6 +25,22 @@ pub struct GuildConfig {
     pub enforcement_log_channel_id: Option<u64>,
     // Chaos factor for randomness in enforcement decisions (0.0-1.0)
     pub chaos_factor: f32,
+    // Warning threshold for the weighted warning system
+    pub warning_threshold: f64,
+}
+
+impl Default for GuildConfig {
+    fn default() -> Self {
+        Self {
+            guild_id: 0,
+            music_channel_id: None,
+            default_notification_method: NotificationMethod::PublicWithMention,
+            default_enforcement: None,
+            enforcement_log_channel_id: None,
+            chaos_factor: 0.3,
+            warning_threshold: 2.0,
+        }
+    }
 }
 
 /// Notification method for warnings
@@ -113,6 +128,29 @@ pub struct UserWarningState {
 /// Centralized data structure for the bot
 #[derive(Clone)]
 pub struct Data(pub Arc<DataInner>);
+
+// Implement TypeMapKey for Data to allow storing it in Serenity's data map
+impl TypeMapKey for Data {
+    type Value = Data;
+}
+
+impl Default for Data {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl std::fmt::Debug for Data {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Data")
+            .field("guild_configs", &self.guild_configs)
+            .field("cache", &self.cache)
+            .field("warnings", &self.warnings)
+            .field("pending_enforcements", &self.pending_enforcements)
+            .field("enforcement_tx", &self.enforcement_tx)
+            .finish()
+    }
+}
 
 impl Data {
     /// Get the guild configuration for a specific guild
@@ -298,28 +336,6 @@ pub struct DataInner {
     pub enforcement_tx: Arc<Option<Sender<EnforcementCheckRequest>>>,
 }
 
-// Implement TypeMapKey for Data to allow storing it in Serenity's data map
-impl TypeMapKey for Data {
-    type Value = Data;
-}
-
-impl Default for Data {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl std::fmt::Debug for Data {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Data")
-            .field("guild_configs", &self.guild_configs)
-            .field("cache", &self.cache)
-            .field("warnings", &self.warnings)
-            .field("pending_enforcements", &self.pending_enforcements)
-            .field("enforcement_tx", &self.enforcement_tx)
-            .finish()
-    }
-}
 
 impl Default for DataInner {
     fn default() -> Self {
@@ -513,7 +529,7 @@ mod tests {
                 duration: Some(3600),
             }),
             enforcement_log_channel_id: Some(54321),
-            chaos_factor: 0.3,
+            ..Default::default()
         };
 
         // Test serialization
