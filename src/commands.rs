@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 /// Basic ping command
 /// This command is used to check if the bot is responsive.
-#[command(slash_command, guild_only, ephemeral)]
+#[command(slash_command, guild_only)]
 pub async fn ping(ctx: Context<'_, Data, Error>) -> Result<(), Error> {
     ctx.say("Pong!").await?;
     Ok(())
@@ -21,11 +21,11 @@ pub async fn ping(ctx: Context<'_, Data, Error>) -> Result<(), Error> {
 /// Summon the daemon to judge a user's voice behavior
 #[command(
     slash_command,
-    ephemeral,
     guild_only,
-    required_permissions = "KICK_MEMBERS|BAN_MEMBERS|MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS",
-    required_bot_permissions = "KICK_MEMBERS|BAN_MEMBERS|MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS",
-    default_member_permissions = "KICK_MEMBERS|BAN_MEMBERS|MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS"
+    ephemeral,
+    required_permissions       = "KICK_MEMBERS|BAN_MEMBERS|MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS|SEND_MESSAGES",
+    required_bot_permissions   = "KICK_MEMBERS|BAN_MEMBERS|MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS|SEND_MESSAGES",
+    default_member_permissions = "KICK_MEMBERS|BAN_MEMBERS|MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS|SEND_MESSAGES"
 )]
 pub async fn summon_daemon(
     ctx: Context<'_, Data, Error>,
@@ -38,14 +38,7 @@ pub async fn summon_daemon(
         .ok_or("This command must be used in a guild")?;
 
     // Get guild configuration
-    let guild_config = ctx.data().guild_configs.get(&guild_id).map_or_else(
-        || GuildConfig {
-            guild_id: guild_id.get(),
-            chaos_factor: 0.3, // Default chaos factor
-            ..Default::default()
-        },
-        |entry| entry.clone(),
-    );
+    let guild_config = get_guild_config(&ctx, guild_id);
 
     // Record this warning in the user's warning state
     let user_id = user.id.get();
@@ -181,7 +174,6 @@ pub async fn summon_daemon(
     // If enforcing, create the enforcement
     if enforce && enforcement_action.is_some() {
         let warning_id = uuid::Uuid::new_v4().to_string();
-        let enforcement_id = uuid::Uuid::new_v4().to_string();
         let now = chrono::Utc::now().to_rfc3339();
 
         // Create a warning record
@@ -202,55 +194,14 @@ pub async fn summon_daemon(
         // Store warning
         ctx.data().warnings.insert(warning_id.clone(), warning);
 
-        // Create pending enforcement
+        // Create pending enforcement and notify
         if let Some(action) = enforcement_action {
-            let execute_at = match &action {
-                EnforcementAction::Ban { duration }
-                | EnforcementAction::Mute { duration }
-                | EnforcementAction::VoiceMute { duration }
-                | EnforcementAction::VoiceDeafen { duration } => {
-                    chrono::Utc::now() + chrono::Duration::seconds(duration.unwrap_or(0) as i64)
-                }
-                EnforcementAction::Kick { delay }
-                | EnforcementAction::VoiceDisconnect { delay } => {
-                    chrono::Utc::now() + chrono::Duration::seconds(delay.unwrap_or(0) as i64)
-                }
-                EnforcementAction::VoiceChannelHaunt { interval, .. } => {
-                    chrono::Utc::now() + chrono::Duration::seconds(interval.unwrap_or(0) as i64)
-                }
-                EnforcementAction::None => chrono::Utc::now(),
-            };
-
-            let pending = PendingEnforcement {
-                id: enforcement_id.clone(),
-                warning_id,
-                user_id,
-                guild_id: guild_id.get(),
-                action,
-                execute_at: execute_at.to_rfc3339(),
-                executed: false,
-            };
-
-            ctx.data()
-                .pending_enforcements
-                .insert(enforcement_id, pending);
-
-            // Notify the enforcement task
-            if let Some(tx) = &*ctx.data().enforcement_tx {
-                let _ = tx
-                    .send(EnforcementCheckRequest::CheckUser {
-                        user_id,
-                        guild_id: guild_id.get(),
-                    })
-                    .await;
-            }
+            create_and_notify_enforcement(&ctx, warning_id, user_id, guild_id.get(), action).await;
         }
     }
 
     // Save data
-    if let Err(e) = ctx.data().save().await {
-        error!("Failed to save data after VC thumbs down: {}", e);
-    }
+    let _ = save_data(&ctx, "VC summon").await;
 
     // Respond to the moderator
     let response = if enforce {
@@ -282,8 +233,8 @@ pub async fn summon_daemon(
     slash_command,
     ephemeral,
     guild_only,
-    required_permissions = "KICK_MEMBERS|BAN_MEMBERS|MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS",
-    required_bot_permissions = "KICK_MEMBERS|BAN_MEMBERS|MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS",
+    required_permissions       = "KICK_MEMBERS|BAN_MEMBERS|MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS",
+    required_bot_permissions   = "KICK_MEMBERS|BAN_MEMBERS|MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS",
     default_member_permissions = "KICK_MEMBERS|BAN_MEMBERS|MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS"
 )]
 pub async fn warn(
@@ -302,13 +253,7 @@ pub async fn warn(
         .ok_or("This command must be used in a guild")?;
 
     // Get guild configuration
-    let guild_config = ctx.data().guild_configs.get(&guild_id).map_or_else(
-        || GuildConfig {
-            guild_id: guild_id.get(),
-            ..Default::default()
-        },
-        |entry| entry.clone(),
-    );
+    let guild_config = get_guild_config(&ctx, guild_id);
 
     // Determine notification method
     let notification_method = match notification.as_deref() {
@@ -354,36 +299,8 @@ pub async fn warn(
 
     // Create pending enforcement if applicable
     if let Some(action) = enforcement {
-        let enforcement_id = Uuid::new_v4().to_string();
-        let execute_at = match &action {
-            EnforcementAction::Ban { duration }
-            | EnforcementAction::Mute { duration }
-            | EnforcementAction::VoiceMute { duration }
-            | EnforcementAction::VoiceDeafen { duration } => {
-                Utc::now() + Duration::seconds(duration.unwrap_or(0) as i64)
-            }
-            EnforcementAction::Kick { delay } | EnforcementAction::VoiceDisconnect { delay } => {
-                Utc::now() + Duration::seconds(delay.unwrap_or(0) as i64)
-            }
-            EnforcementAction::VoiceChannelHaunt { interval, .. } => {
-                Utc::now() + Duration::seconds(interval.unwrap_or(0) as i64)
-            }
-            EnforcementAction::None => unreachable!(),
-        };
-
-        let pending = PendingEnforcement {
-            id: enforcement_id.clone(),
-            warning_id,
-            user_id: user.id.get(),
-            guild_id: guild_id.get(),
-            action,
-            execute_at: execute_at.to_rfc3339(),
-            executed: false,
-        };
-        info!("Pending enforcement created: {pending:?}");
-        ctx.data()
-            .pending_enforcements
-            .insert(enforcement_id, pending);
+        let enforcement_id = create_pending_enforcement(&ctx, warning_id.clone(), user.id.get(), guild_id.get(), action).await;
+        info!("Pending enforcement created with ID: {}", enforcement_id);
         info!(
             "Pending enforcements: {:?}",
             ctx.data().pending_enforcements
@@ -437,9 +354,7 @@ pub async fn warn(
     );
 
     // Save data
-    if let Err(e) = ctx.data().save().await {
-        error!("Failed to save data after warning: {}", e);
-    }
+    let _ = save_data(&ctx, "warning").await;
 
     info!(
         target: crate::COMMAND_TARGET,
@@ -466,24 +381,7 @@ pub async fn warn(
             "Immediate enforcement action detected"
         );
 
-        // Check if this is an immediate action
-        let is_immediate = match action {
-            EnforcementAction::Kick { delay } | EnforcementAction::VoiceDisconnect { delay } => {
-                delay.is_none() || delay.is_some_and(|d| d == 0)
-            }
-            EnforcementAction::Mute { duration }
-            | EnforcementAction::VoiceMute { duration }
-            | EnforcementAction::VoiceDeafen { duration }
-            | EnforcementAction::Ban { duration } => {
-                duration.is_none() || duration.is_some_and(|d| d == 0)
-            }
-            EnforcementAction::VoiceChannelHaunt { interval, .. } => {
-                interval.is_none() || interval.is_some_and(|d| d == 0)
-            }
-            EnforcementAction::None => false,
-        };
-
-        if is_immediate {
+        if is_immediate_action(action) {
             info!(
                 target: crate::COMMAND_TARGET,
                 command = "warn",
@@ -494,14 +392,7 @@ pub async fn warn(
                 "Sending immediate enforcement check request"
             );
             // For immediate actions, notify the enforcement task
-            if let Some(tx) = &*ctx.data().enforcement_tx {
-                let _ = tx
-                    .send(EnforcementCheckRequest::CheckUser {
-                        user_id: user.id.get(),
-                        guild_id: guild_id.get(),
-                    })
-                    .await;
-            }
+            notify_enforcement_task(&ctx, user.id.get(), guild_id.get()).await;
         } else {
             warn!("Enforcement action is not immediate: {action:?}");
             // Non-immediate actions will be handled by the regular check interval
@@ -529,14 +420,7 @@ pub async fn daemon_altar(
         .ok_or("This command must be used in a guild")?;
 
     // Get current guild config or create default
-    let mut guild_config = ctx.data().guild_configs.get(&guild_id).map_or_else(
-        || GuildConfig {
-            guild_id: guild_id.get(),
-            chaos_factor: 0.3, // Default chaos factor
-            ..Default::default()
-        },
-        |entry| entry.clone(),
-    );
+    let mut guild_config = get_guild_config(&ctx, guild_id);
 
     // Update the config with the new channel ID
     let channel_id = channel.id();
@@ -546,11 +430,7 @@ pub async fn daemon_altar(
     ctx.data().guild_configs.insert(guild_id, guild_config);
 
     // Save data
-    if let Err(e) = ctx.data().save().await {
-        error!(
-            "Failed to save data after setting enforcement log channel: {}",
-            e
-        );
+    if let Err(_) = save_data(&ctx, "setting enforcement log channel").await {
         ctx.say("Failed to save configuration. Check logs for details.")
             .await?;
         return Ok(());
@@ -604,13 +484,7 @@ pub async fn chaos_ritual(
     }
 
     // Get current guild config or create default
-    let mut guild_config = ctx.data().guild_configs.get(&guild_id).map_or_else(
-        || GuildConfig {
-            guild_id: guild_id.get(),
-            ..Default::default()
-        },
-        |entry| entry.clone(),
-    );
+    let mut guild_config = get_guild_config(&ctx, guild_id);
 
     // Update the chaos factor
     guild_config.chaos_factor = factor;
@@ -619,8 +493,7 @@ pub async fn chaos_ritual(
     ctx.data().guild_configs.insert(guild_id, guild_config);
 
     // Save data
-    if let Err(e) = ctx.data().save().await {
-        error!("Failed to save data after setting chaos factor: {}", e);
+    if let Err(e) = save_data(&ctx, "setting chaos factor").await {
         ctx.say("Failed to save configuration. Check logs for details.")
             .await?;
         return Ok(());
@@ -688,13 +561,7 @@ pub async fn appease(
             ));
 
             // Notify the enforcement task that this enforcement has been canceled
-            if let Some(tx) = &*ctx.data().enforcement_tx {
-                let _ = tx
-                    .send(EnforcementCheckRequest::CheckEnforcement {
-                        enforcement_id: id.clone(),
-                    })
-                    .await;
-            }
+            notify_enforcement_task_by_id(&ctx, id.clone()).await;
         }
     }
 
@@ -704,36 +571,146 @@ pub async fn appease(
 
     // Save data
     if canceled {
-        if let Err(e) = ctx.data().save().await {
-            error!("Failed to save data after canceling warning: {}", e);
-        }
+        let _ = save_data(&ctx, "canceling enforcement").await;
     }
 
     ctx.say(response).await?;
     Ok(())
 }
 
-// // Admin check function for commands that require admin permissions
-// async fn admin_check(ctx: Context<'_, Data, Error>) -> Result<bool, Error> {
-//     // let guild = match ctx
-//     //     .guild() {
-//     //     Some(guild) => guild,
-//     //     None => {
-//     //         ctx.say("This command can only be used in a server").await?;
-//     //         return Ok(false);
-//     //     }
-//     // }.clone();
+/// Helper functions for commands
 
-//     if let Some(member) = ctx.author_member().await {
-//         #[allow(deprecated)]
-//         //let permissions = guild.member_permissions(&member);
-//         let permissions = member.permissions(ctx)?;
-//         return Ok(permissions.administrator() || permissions.manage_guild());
-//     }
-//     ctx.say("This command can only be used by administrators")
-//         .await?;
-//     Ok(false)
-// }
+/// Retrieves the guild configuration or creates a default one
+fn get_guild_config(ctx: &Context<'_, Data, Error>, guild_id: serenity::GuildId) -> GuildConfig {
+    ctx.data().guild_configs.get(&guild_id).map_or_else(
+        || GuildConfig {
+            guild_id: guild_id.get(),
+            chaos_factor: 0.3, // Default for summon_daemon
+            ..Default::default()
+        },
+        |entry| entry.clone(),
+    )
+}
+
+/// Calculates the execution time for an enforcement action
+fn calculate_execute_at(action: &EnforcementAction) -> chrono::DateTime<Utc> {
+    match action {
+        EnforcementAction::Ban { duration }
+        | EnforcementAction::Mute { duration }
+        | EnforcementAction::VoiceMute { duration }
+        | EnforcementAction::VoiceDeafen { duration } => {
+            Utc::now() + Duration::seconds(duration.unwrap_or(0) as i64)
+        }
+        EnforcementAction::Kick { delay } | EnforcementAction::VoiceDisconnect { delay } => {
+            Utc::now() + Duration::seconds(delay.unwrap_or(0) as i64)
+        }
+        EnforcementAction::VoiceChannelHaunt { interval, .. } => {
+            Utc::now() + Duration::seconds(interval.unwrap_or(0) as i64)
+        }
+        EnforcementAction::None => Utc::now(),
+    }
+}
+
+/// Creates and stores a pending enforcement
+async fn create_pending_enforcement(
+    ctx: &Context<'_, Data, Error>,
+    warning_id: String,
+    user_id: u64,
+    guild_id: u64,
+    action: EnforcementAction,
+) -> String {
+    let enforcement_id = Uuid::new_v4().to_string();
+    let execute_at = calculate_execute_at(&action);
+    
+    let pending = PendingEnforcement {
+        id: enforcement_id.clone(),
+        warning_id,
+        user_id,
+        guild_id,
+        action,
+        execute_at: execute_at.to_rfc3339(),
+        executed: false,
+    };
+    
+    ctx.data()
+        .pending_enforcements
+        .insert(enforcement_id.clone(), pending);
+        
+    enforcement_id
+}
+
+/// Notifies the enforcement task about a user
+async fn notify_enforcement_task(
+    ctx: &Context<'_, Data, Error>,
+    user_id: u64,
+    guild_id: u64,
+) {
+    if let Some(tx) = &*ctx.data().enforcement_tx {
+        let _ = tx
+            .send(EnforcementCheckRequest::CheckUser {
+                user_id,
+                guild_id,
+            })
+            .await;
+    }
+}
+
+/// Saves data with appropriate error handling
+async fn save_data(ctx: &Context<'_, Data, Error>, error_context: &str) -> Result<(), Error> {
+    if let Err(e) = ctx.data().save().await {
+        error!("Failed to save data after {}: {}", error_context, e);
+        return Err(e);
+    }
+    Ok(())
+}
+
+/// Checks if an enforcement action should be applied immediately
+fn is_immediate_action(action: &EnforcementAction) -> bool {
+    match action {
+        EnforcementAction::Kick { delay } | EnforcementAction::VoiceDisconnect { delay } => {
+            delay.is_none() || delay.is_some_and(|d| d == 0)
+        }
+        EnforcementAction::Mute { duration }
+        | EnforcementAction::VoiceMute { duration }
+        | EnforcementAction::VoiceDeafen { duration }
+        | EnforcementAction::Ban { duration } => {
+            duration.is_none() || duration.is_some_and(|d| d == 0)
+        }
+        EnforcementAction::VoiceChannelHaunt { interval, .. } => {
+            interval.is_none() || interval.is_some_and(|d| d == 0)
+        }
+        EnforcementAction::None => false,
+    }
+}
+
+/// Creates a pending enforcement and notifies if immediate
+async fn create_and_notify_enforcement(
+    ctx: &Context<'_, Data, Error>,
+    warning_id: String,
+    user_id: u64,
+    guild_id: u64,
+    action: EnforcementAction,
+) {
+    let _enforcement_id = create_pending_enforcement(ctx, warning_id, user_id, guild_id, action.clone()).await;
+    
+    if is_immediate_action(&action) {
+        notify_enforcement_task(ctx, user_id, guild_id).await;
+    }
+}
+
+/// Notifies the enforcement task about a specific enforcement
+async fn notify_enforcement_task_by_id(
+    ctx: &Context<'_, Data, Error>,
+    enforcement_id: String,
+) {
+    if let Some(tx) = &*ctx.data().enforcement_tx {
+        let _ = tx
+            .send(EnforcementCheckRequest::CheckEnforcement {
+                enforcement_id,
+            })
+            .await;
+    }
+}
 
 #[cfg(test)]
 mod tests {
