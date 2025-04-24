@@ -11,7 +11,6 @@ use serde::{Deserialize, Serialize};
 use serenity::prelude::TypeMapKey;
 use tokio::sync::mpsc::Sender;
 
-
 // Constants for the scoring algorithm
 const DECAY_RATE: f64 = 0.05; // Higher values mean faster decay
 const MOD_DIVERSITY_BONUS: f64 = 0.5; // Bonus for different mods reporting
@@ -115,7 +114,7 @@ pub struct WarningContext {
     num_warn: u64,
     voice_warnings: Vec<Warning>,
     text_warnings: Vec<Warning>,
-    warning_score: f64
+    warning_score: f64,
 }
 
 /// Represents a pending enforcement action
@@ -306,7 +305,6 @@ impl Data {
         if state.warning_timestamps.is_empty() {
             return 0.0;
         }
-
 
         let now = chrono::Utc::now();
         let mut total_score = 0.0;

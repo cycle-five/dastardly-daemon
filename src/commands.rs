@@ -1001,9 +1001,7 @@ async fn log_daemon_warning(
             if enforce {
                 format!("**JUDGMENT**: {action_text}")
             } else if state.warning_timestamps.len() == 1 {
-                format!(
-                    "**WARNING**: Further transgressions will result in: {action_text}",
-                )
+                format!("**WARNING**: Further transgressions will result in: {action_text}",)
             } else {
                 format!(
                     "**WARNING**: The daemon grows restless. Score approaches threshold of {WARNING_THRESHOLD:.1}",
