@@ -92,7 +92,7 @@ pub async fn summon_daemon(
             "server" => guild_config
                 .default_enforcement
                 .unwrap_or(EnforcementAction::Kick { delay: Some(0) }),
-            "text" | _ => guild_config
+            _ => guild_config // text
                 .default_enforcement
                 .unwrap_or(EnforcementAction::Mute {
                     duration: Some(300),
@@ -140,24 +140,26 @@ pub async fn summon_daemon(
     };
 
     // Create context for LLM
-    let context = format!(
-        "User: {}. Infraction: {}. Reason: {}. Warning count: {}. Score: {:.2}. Enforcing: {}.",
-        user.name,
-        infraction_type,
-        reason,
-        state.warning_timestamps.len(),
-        adjusted_score,
-        enforce
-    );
+    // let context = format!(
+    //     "User: {}. Infraction: {}. Reason: {}. Warning count: {}. Score: {:.2}. Enforcing: {}.",
+    //     user.name,
+    //     infraction_type,
+    //     reason,
+    //     state.warning_timestamps.len(),
+    //     adjusted_score,
+    //     enforce
+    // );
+    let warning_context = WarningContext {
+        user_name: user.name.clone(),
+        num_warn: state.warning_timestamps.len() as u64,
+        voice_warnings: ctx.data().get_warnings(),
+        warning_score: adjusted_score,
+        warning_threshold: WARNING_THRESHOLD,
+        mod_name: ctx.author().name.clone(),
+    };
 
-    // // Generate demonic response
-    // let demonic_message = crate::llm::generate_daemon_response(
-    //     &context,
-    //     Some(&state),
-    //     response_type
-    // ).await;
-
-    let demonic_message = generate_daemon_response(&context, Some(&state), response_type).await;
+    // Generate a demonic message based on the context
+    let demonic_message = generate_daemon_response(&warning_context.to_string(), Some(&state), response_type).await;
 
     // Notify the user via the enforcement log channel
     if let Some(log_channel_id) = guild_config.enforcement_log_channel_id {
@@ -182,19 +184,17 @@ pub async fn summon_daemon(
                 // For voice infractions, use a more natural demonic message without embeds
                 if is_voice {
                     let message = CreateMessage::new().content(format!(
-                        "**[DAEMON WHISPERS]** {}\n\nYou have been warned in {} for: {}",
+                        "**[DAEMON WHISPERS]** {}\n\nYou have been warned in {}",
                         demonic_message,
                         ctx.guild().unwrap().name,
-                        reason
                     ));
                     let _ = channel.send_message(&ctx.http(), message).await;
                 } else {
                     // For non-voice infractions, use a simpler format but still include the demonic message
                     let message = CreateMessage::new().content(format!(
-                        "**[DAEMON SPEAKS]** {}\n\nYou have been warned in {} for: {}",
+                        "**[DAEMON SPEAKS]** {}\n\nYou have been warned in {}",
                         demonic_message,
                         ctx.guild().unwrap().name,
-                        reason
                     ));
                     let _ = channel.send_message(&ctx.http(), message).await;
                 }
@@ -204,19 +204,17 @@ pub async fn summon_daemon(
             // For voice infractions, use a more natural demonic message without embeds
             if is_voice {
                 let content = format!(
-                    "**[DAEMON ROARS]** {}\n\n{} You have been warned for: {}",
+                    "**[DAEMON ROARS]** {}\n\n{}",
                     demonic_message,
-                    user.mention(),
-                    reason
+                    user.mention()
                 );
                 let _ = ctx.say(content).await;
             } else {
                 // For non-voice infractions, use a simpler format but still include the demonic message
                 let content = format!(
-                    "**[DAEMON DECLARES]** {}\n\n{} You have been warned for: {}",
+                    "**[DAEMON DECLARES]** {}\n\n{}",
                     demonic_message,
                     user.mention(),
-                    reason
                 );
                 let _ = ctx.say(content).await;
             }
@@ -258,17 +256,20 @@ pub async fn summon_daemon(
     Ok(())
 }
 
+/// Generate a demonic response based on the context.
+/// This should be used to create thematic messages for the daemon via
+/// the LLM integration.
 async fn generate_daemon_response(
-    context: &str,
+    warning_context: &str,
     state: Option<&UserWarningState>,
     response_type: crate::llm::ResponseType,
 ) -> String {
     #[cfg(feature = "llm-integration")]
     {
         crate::llm::generate_daemon_response(
-            &context,
-            Some(&state),
-            crate::llm::ResponseType::Summoning,
+            warning_context,
+            state,
+            response_type,
         )
         .await
     }
@@ -276,7 +277,7 @@ async fn generate_daemon_response(
     {
         let _ = state;
         let _ = response_type;
-        format!("Daemon response: {context}")
+        warning_context.to_string()
     }
 }
 

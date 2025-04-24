@@ -5,7 +5,7 @@ edition = "2024"
 description = "A Discord bot for voice channel moderation with an unpredictable daemon personality"
 
 [features]
-default = []
+default = ["llm-integration"]
 llm-integration = []
 
 [dependencies]
