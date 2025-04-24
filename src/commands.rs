@@ -2,7 +2,7 @@ use crate::{
     Data, Error,
     data::{
         EnforcementAction, GuildConfig, NotificationMethod, PendingEnforcement, UserWarningState,
-        Warning,
+        Warning, WarningContext,
     },
     enforcement::EnforcementCheckRequest,
 };
@@ -89,15 +89,10 @@ pub async fn summon_daemon(
                 .unwrap_or(EnforcementAction::VoiceMute {
                     duration: Some(300),
                 }),
-            "text" => guild_config
-                .default_enforcement
-                .unwrap_or(EnforcementAction::Mute {
-                    duration: Some(300),
-                }),
             "server" => guild_config
                 .default_enforcement
                 .unwrap_or(EnforcementAction::Kick { delay: Some(0) }),
-            _ => guild_config
+            "text" | _ => guild_config
                 .default_enforcement
                 .unwrap_or(EnforcementAction::Mute {
                     duration: Some(300),
@@ -690,15 +685,14 @@ pub async fn judgment_history(
     let score = ctx.data().calculate_warning_score(user_id, guild_id.get());
 
     // Generate a demonic response for the judgment history
-    let context = format!(
-        "User: {}. Total warnings: {}. Voice warnings: {}. Current score: {:.2}. Threshold: {:.1}. Moderator: {}.",
-        user.name,
-        warnings.len(),
-        voice_warnings,
-        score,
-        WARNING_THRESHOLD,
-        ctx.author().name
-    );
+    let warn_context = WarningContext {
+        user_name: user.name.clone(),
+        num_warn: warnings.len() as u64,
+        voice_warnings: warnings.clone(),
+        warning_score: score,
+        warning_threshold: WARNING_THRESHOLD,
+        mod_name: ctx.author().name.clone(),
+    };
 
     // Use a punishment type if close to threshold, otherwise warning type
     let response_type = if score > WARNING_THRESHOLD * 0.75 {
@@ -707,7 +701,8 @@ pub async fn judgment_history(
         crate::llm::ResponseType::Warning
     };
 
-    let demonic_message = generate_daemon_response(&context, Some(&state), response_type).await;
+    let demonic_message =
+        generate_daemon_response(&warn_context.to_string(), Some(&state), response_type).await;
 
     // Create thematic header based on warning score
     let header = if score > WARNING_THRESHOLD {

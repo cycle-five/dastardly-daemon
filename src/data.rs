@@ -1,5 +1,6 @@
 use std::{
     default::Default,
+    fmt::{Display, Formatter},
     ops::{Deref, DerefMut},
     sync::Arc,
 };
@@ -107,14 +108,38 @@ pub struct Warning {
     pub enforcement: Option<EnforcementAction>,
 }
 
+impl Display for Warning {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!(
+            "Warning ID: {}. User ID: {}. Issuer ID: {}. Guild ID: {}. Reason: {}. Timestamp: {}.",
+            self.id, self.user_id, self.issuer_id, self.guild_id, self.reason, self.timestamp
+        ))
+    }
+}
+
 /// Represents the context of a warning
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WarningContext {
-    user_name: String,
-    num_warn: u64,
-    voice_warnings: Vec<Warning>,
-    text_warnings: Vec<Warning>,
-    warning_score: f64,
+    pub user_name: String,
+    pub num_warn: u64,
+    pub voice_warnings: Vec<Warning>,
+    pub warning_score: f64,
+    pub warning_threshold: f64,
+    pub mod_name: String,
+}
+
+impl Display for WarningContext {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!(
+            "User: {}. Total warnings: {}. Voice warnings: {:?}. Current score: {:.2}. Threshold: {:.1}. Moderator: {}.",
+            self.user_name,
+            self.num_warn,
+            self.voice_warnings,
+            self.warning_score,
+            self.warning_threshold,
+            self.mod_name
+        ))
+    }
 }
 
 /// Represents a pending enforcement action
