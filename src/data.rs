@@ -540,7 +540,10 @@ mod tests {
         let config = GuildConfig::default();
         assert_eq!(config.guild_id, 0);
         assert!(config.music_channel_id.is_none());
-        assert!(matches!(config.default_notification_method, NotificationMethod::PublicWithMention));
+        assert!(matches!(
+            config.default_notification_method,
+            NotificationMethod::PublicWithMention
+        ));
         assert!(config.default_enforcement.is_none());
     }
 
