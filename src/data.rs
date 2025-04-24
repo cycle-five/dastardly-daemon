@@ -1,5 +1,7 @@
 use std::{
-    default::Default, ops::{Deref, DerefMut}, sync::Arc
+    default::Default,
+    ops::{Deref, DerefMut},
+    sync::Arc,
 };
 
 use crate::enforcement::EnforcementCheckRequest;
@@ -8,6 +10,11 @@ use poise::serenity_prelude as serenity;
 use serde::{Deserialize, Serialize};
 use serenity::prelude::TypeMapKey;
 use tokio::sync::mpsc::Sender;
+
+
+// Constants for the scoring algorithm
+const DECAY_RATE: f64 = 0.05; // Higher values mean faster decay
+const MOD_DIVERSITY_BONUS: f64 = 0.5; // Bonus for different mods reporting
 
 /// Guild configuration structure.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -99,6 +106,16 @@ pub struct Warning {
     pub timestamp: String,
     pub notification_method: NotificationMethod,
     pub enforcement: Option<EnforcementAction>,
+}
+
+/// Represents the context of a warning
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WarningContext {
+    user_name: String,
+    num_warn: u64,
+    voice_warnings: Vec<Warning>,
+    text_warnings: Vec<Warning>,
+    warning_score: f64
 }
 
 /// Represents a pending enforcement action
@@ -237,12 +254,13 @@ impl Data {
     }
 
     /// Get a user's warning state or create a new one if it doesn't exist
+    #[must_use]
     pub fn get_or_create_user_warning_state(
         &self,
         user_id: u64,
         guild_id: u64,
     ) -> UserWarningState {
-        let key = format!("{}:{}", user_id, guild_id);
+        let key = format!("{user_id}:{guild_id}");
         if let Some(state) = self.0.user_warning_states.get(&key) {
             state.value().clone()
         } else {
@@ -259,6 +277,7 @@ impl Data {
     }
 
     /// Add a warning to a user's warning state
+    #[must_use]
     pub fn add_to_user_warning_state(
         &self,
         user_id: u64,
@@ -266,7 +285,7 @@ impl Data {
         reason: String,
         issuer_id: u64,
     ) -> UserWarningState {
-        let key = format!("{}:{}", user_id, guild_id);
+        let key = format!("{user_id}:{guild_id}");
         let timestamp = chrono::Utc::now().to_rfc3339();
 
         let mut state = self.get_or_create_user_warning_state(user_id, guild_id);
@@ -281,15 +300,13 @@ impl Data {
 
     /// Calculate a weighted warning score for a user based on recency and mod diversity
     /// Returns a score from 0.0 to infinity where higher scores mean more warnings
+    #[must_use]
     pub fn calculate_warning_score(&self, user_id: u64, guild_id: u64) -> f64 {
         let state = self.get_or_create_user_warning_state(user_id, guild_id);
         if state.warning_timestamps.is_empty() {
             return 0.0;
         }
 
-        // Constants for the scoring algorithm
-        const DECAY_RATE: f64 = 0.05; // Higher values mean faster decay
-        const MOD_DIVERSITY_BONUS: f64 = 0.5; // Bonus for different mods reporting
 
         let now = chrono::Utc::now();
         let mut total_score = 0.0;
@@ -335,7 +352,6 @@ pub struct DataInner {
     // Channel to send enforcement check requests
     pub enforcement_tx: Arc<Option<Sender<EnforcementCheckRequest>>>,
 }
-
 
 impl Default for DataInner {
     fn default() -> Self {

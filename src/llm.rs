@@ -113,8 +113,8 @@ async fn generate_daemon_response(
 ) -> String {
     // Simple static responses when LLM integration is not enabled
     // Still check for repeat offenders to add some variety
-    let repeat_offender = user_history
-        .map_or_else(|| false, |state| state.warning_timestamps.len() > 2);
+    let repeat_offender =
+        user_history.map_or_else(|| false, |state| state.warning_timestamps.len() > 2);
 
     match response_type {
         ResponseType::Warning => {

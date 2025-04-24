@@ -276,7 +276,7 @@ async fn handle_mute_action(
             .disable_communication_until_datetime(http, timeout_until.into())
             .await
         {
-            Ok(_) => {
+            Ok(()) => {
                 info!("Successfully muted user {user_id} until {timeout_until}");
             }
             Err(e) => {
@@ -303,14 +303,14 @@ async fn handle_ban_action(
         let reason = format!("Temporary ban from warning system for {duration:?} seconds");
 
         match guild_id.ban_with_reason(http, user_id, 7, &reason).await {
-            Ok(_) => info!("Successfully banned user {user_id}"),
+            Ok(()) => info!("Successfully banned user {user_id}"),
             Err(e) => error!("Failed to ban user {user_id}: {e}"),
         }
     } else {
         // Unban the user when duration expires
         info!("Unbanning user {user_id} in guild {guild_id}");
         match guild_id.unban(http, user_id).await {
-            Ok(_) => info!("Successfully unbanned user {user_id}"),
+            Ok(()) => info!("Successfully unbanned user {user_id}"),
             Err(e) => error!("Failed to unban user {user_id}: {e}"),
         }
     }
@@ -333,7 +333,7 @@ async fn handle_kick_action(
         if let Ok((_, member)) = get_guild_and_member(http, guild_id, user_id).await {
             let reason = "Kicked by warning system";
             match member.kick_with_reason(http, reason).await {
-                Ok(_) => info!("Successfully kicked user {user_id}"),
+                Ok(()) => info!("Successfully kicked user {user_id}"),
                 Err(e) => error!("Failed to kick user {user_id}: {e}"),
             }
         }
@@ -362,7 +362,7 @@ async fn handle_voice_mute_action(
 
         if let Ok((_, mut member)) = get_guild_and_member(http, guild_id, user_id).await {
             match member.edit(http, EditMember::new().mute(true)).await {
-                Ok(_) => {
+                Ok(()) => {
                     info!("Successfully voice muted user {user_id}");
 
                     // If there's a duration, log that it will need manual removal
@@ -383,7 +383,7 @@ async fn handle_voice_mute_action(
 
         if let Ok((_, mut member)) = get_guild_and_member(http, guild_id, user_id).await {
             match member.edit(http, EditMember::new().mute(false)).await {
-                Ok(_) => info!("Successfully removed voice mute from user {user_id}"),
+                Ok(()) => info!("Successfully removed voice mute from user {user_id}"),
                 Err(e) => error!("Failed to remove voice mute from user {user_id}: {e}"),
             }
         }
@@ -408,7 +408,7 @@ async fn handle_voice_deafen_action(
 
         if let Ok((_, mut member)) = get_guild_and_member(http, guild_id, user_id).await {
             match member.edit(http, EditMember::new().deafen(true)).await {
-                Ok(_) => {
+                Ok(()) => {
                     info!("Successfully voice deafened user {user_id}");
 
                     // If there's a duration, log that it will need manual removal
@@ -467,11 +467,7 @@ async fn handle_voice_disconnect_action(
 }
 
 /// Get the current voice channel for a user
-fn get_user_voice_channel(
-    _http: &Http,
-    _guild_id: GuildId,
-    _user_id: UserId,
-) -> Option<ChannelId> {
+fn get_user_voice_channel(_http: &Http, _guild_id: GuildId, _user_id: UserId) -> Option<ChannelId> {
     // This is a stub that returns a hardcoded value
     // In a real implementation, you would query the user's current voice state
     Some(ChannelId::new(1))
@@ -528,7 +524,9 @@ async fn handle_voice_channel_haunt_action(
     // Find the user's current voice channel
     let current_voice_channel = get_user_voice_channel(http, guild_id, user_id);
 
-    let voice_channel_id = if let Some(id) = current_voice_channel { id } else { 
+    let voice_channel_id = if let Some(id) = current_voice_channel {
+        id
+    } else {
         error!("User {user_id} is not in a voice channel, cannot haunt");
         return Ok(());
     };
@@ -707,7 +705,14 @@ async fn execute_enforcement(http: &Http, data: &Data, enforcement_id: &str) -> 
                 handle_voice_deafen_action(http, guild_id, user_id, duration, is_executed).await?;
             }
             EnforcementAction::VoiceDisconnect { delay } => {
-                handle_voice_disconnect_action(http, guild_id, user_id, delay.as_ref(), is_executed).await?;
+                handle_voice_disconnect_action(
+                    http,
+                    guild_id,
+                    user_id,
+                    delay.as_ref(),
+                    is_executed,
+                )
+                .await?;
             }
             EnforcementAction::None => {}
         }
