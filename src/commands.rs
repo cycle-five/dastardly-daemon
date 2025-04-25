@@ -159,7 +159,8 @@ pub async fn summon_daemon(
     };
 
     // Generate a demonic message based on the context
-    let demonic_message = generate_daemon_response(&warning_context.to_string(), Some(&state), response_type).await;
+    let demonic_message =
+        generate_daemon_response(&warning_context.to_string(), Some(&state), response_type).await;
 
     // Notify the user via the enforcement log channel
     if let Some(log_channel_id) = guild_config.enforcement_log_channel_id {
@@ -266,12 +267,7 @@ async fn generate_daemon_response(
 ) -> String {
     #[cfg(feature = "llm-integration")]
     {
-        crate::llm::generate_daemon_response(
-            warning_context,
-            state,
-            response_type,
-        )
-        .await
+        crate::llm::generate_daemon_response(warning_context, state, response_type).await
     }
     #[cfg(not(feature = "llm-integration"))]
     {

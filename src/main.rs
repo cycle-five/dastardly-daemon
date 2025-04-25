@@ -64,10 +64,10 @@ async fn async_main() -> Result<(), Error> {
                 // Register commands from commands module
                 commands::ping(),
                 commands::warn(),
-                commands::appease(),      // renamed from cancelwarning
-                commands::summon_daemon(), // renamed from vcthumbsdown
-                commands::daemon_altar(),  // renamed from setenforcementlog
-                commands::chaos_ritual(),  // renamed from setchaos
+                commands::appease(),
+                commands::summon_daemon(),
+                commands::daemon_altar(),
+                commands::chaos_ritual(),
             ],
             pre_command: |ctx| {
                 Box::pin(async move {
@@ -102,7 +102,11 @@ async fn async_main() -> Result<(), Error> {
         .build();
 
     // Configure the Serenity client
-    let intents = GatewayIntents::non_privileged() | GatewayIntents::GUILD_MODERATION;
+    let intents = GatewayIntents::non_privileged()
+        | GatewayIntents::GUILD_MODERATION
+        | GatewayIntents::GUILD_MESSAGES
+        | GatewayIntents::MESSAGE_CONTENT
+        | GatewayIntents::GUILD_VOICE_STATES;
     let mut client = serenity::ClientBuilder::new(token, intents)
         .event_handler(handlers::Handler)
         .framework(framework)

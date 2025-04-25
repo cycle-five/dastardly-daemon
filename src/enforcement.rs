@@ -2,7 +2,7 @@ use crate::data::EnforcementAction;
 use crate::{Data, Error};
 use chrono::{DateTime, Utc};
 use poise::serenity_prelude::{GuildId, Http, UserId};
-use serenity::all::ChannelId;
+use serenity::all::{CacheHttp, ChannelId};
 use std::sync::Arc;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::time::Duration;
@@ -467,10 +467,24 @@ async fn handle_voice_disconnect_action(
 }
 
 /// Get the current voice channel for a user
-fn get_user_voice_channel(_http: &Http, _guild_id: GuildId, _user_id: UserId) -> Option<ChannelId> {
-    // This is a stub that returns a hardcoded value
-    // In a real implementation, you would query the user's current voice state
-    Some(ChannelId::new(1))
+async fn get_user_voice_channel(
+    cache_http: &impl CacheHttp,
+    guild_id: GuildId,
+    user_id: UserId,
+) -> Option<ChannelId> {
+    let guild = cache_http.cache().map(|g| g.guild(guild_id)).flatten();
+    let guild = match guild {
+        Some(g) => g,
+        None => {
+            error!("Guild {guild_id} not found in cache");
+            return None;
+        }
+    };
+
+    guild
+        .voice_states
+        .get(&user_id)
+        .and_then(|voice_state| voice_state.channel_id)
 }
 
 /// Get all voice channels in a guild
@@ -522,7 +536,7 @@ async fn handle_voice_channel_haunt_action(
     };
 
     // Find the user's current voice channel
-    let current_voice_channel = get_user_voice_channel(http, guild_id, user_id);
+    let current_voice_channel = get_user_voice_channel(http, guild_id, user_id).await;
 
     let voice_channel_id = if let Some(id) = current_voice_channel {
         id
