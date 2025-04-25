@@ -4,7 +4,6 @@
 //! It is behind a feature flag "llm-integration".
 
 use crate::data::UserWarningState;
-use crate::data::WarningContext;
 
 #[allow(unused)]
 /// Configuration for the LLM client
@@ -62,7 +61,7 @@ pub enum ResponseType {
 /// A string containing the generated response
 #[cfg(feature = "llm-integration")]
 pub async fn generate_daemon_response(
-    warning_context: &str,
+    _warning_context: &str,
     user_history: Option<&UserWarningState>,
     response_type: ResponseType,
 ) -> String {
