@@ -50,7 +50,7 @@ pub async fn summon_daemon(
 
     // Determine infraction category
     let infraction_type = infraction_type
-        .unwrap_or_else(|| "general".to_string())
+        .unwrap_or_else(|| "voice".to_string())
         .to_lowercase();
 
     // Determine notification method
