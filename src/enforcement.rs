@@ -1,7 +1,7 @@
-use crate::data::EnforcementAction;
+use crate::data::{EnforcementAction, EnforcementState};
 use crate::{Data, Error};
 use chrono::{DateTime, Utc};
-use poise::serenity_prelude::{GuildId, Http, UserId};
+use poise::serenity_prelude::{builder::EditMember, GuildId, Http, UserId};
 use serenity::all::{CacheHttp, ChannelId};
 use std::sync::Arc;
 use tokio::sync::mpsc::{self, Receiver, Sender};
@@ -133,15 +133,15 @@ async fn enforcement_task(
     info!("Enforcement task shut down");
 }
 
-/// Check all pending enforcements
+/// Check all enforcements (both pending executions and active ones that need reversal)
 async fn check_all_enforcements(http: &Http, data: &Data) -> Result<(), Error> {
     let now = Utc::now();
+    
+    // Find pending enforcements that need to be executed
     let mut enforcements_to_execute = Vec::new();
-
-    // Find enforcements that need to be executed
     for entry in &data.pending_enforcements {
         let pending = entry.value();
-        if !pending.executed {
+        if pending.state == EnforcementState::Pending {
             let execute_at = DateTime::parse_from_rfc3339(&pending.execute_at)
                 .map_or_else(|_| DateTime::<Utc>::MIN_UTC, |dt| dt.with_timezone(&Utc));
 
@@ -150,17 +150,37 @@ async fn check_all_enforcements(http: &Http, data: &Data) -> Result<(), Error> {
             }
         }
     }
-
-    // Execute each enforcement - use a clone to avoid borrowing issues
-    let enforcements_to_execute_clone = enforcements_to_execute.clone();
-    for id in enforcements_to_execute_clone {
-        execute_enforcement(http, data, &id).await?;
+    
+    // Find active enforcements that need to be reversed
+    let mut enforcements_to_reverse = Vec::new();
+    for entry in &data.active_enforcements {
+        let active = entry.value();
+        if active.state == EnforcementState::Active && active.reverse_at.is_some() {
+            if let Some(reverse_at_str) = &active.reverse_at {
+                let reverse_at = DateTime::parse_from_rfc3339(reverse_at_str)
+                    .map_or_else(|_| DateTime::<Utc>::MAX_UTC, |dt| dt.with_timezone(&Utc));
+                
+                if reverse_at <= now {
+                    enforcements_to_reverse.push(active.id.clone());
+                }
+            }
+        }
     }
 
-    // Save updated data
-    if !enforcements_to_execute.is_empty() {
+    // Execute pending enforcements
+    for id in &enforcements_to_execute {
+        execute_enforcement(http, data, id).await?;
+    }
+    
+    // Reverse active enforcements
+    for id in &enforcements_to_reverse {
+        reverse_enforcement(http, data, id).await?;
+    }
+
+    // Save updated data if anything was executed or reversed
+    if !enforcements_to_execute.is_empty() || !enforcements_to_reverse.is_empty() {
         if let Err(e) = data.save().await {
-            error!("Failed to save data after executing enforcements: {}", e);
+            error!("Failed to save data after enforcement operations: {}", e);
         }
     }
 
@@ -175,60 +195,110 @@ async fn check_user_enforcements(
     guild_id: u64,
 ) -> Result<(), Error> {
     let mut enforcements_to_execute = Vec::new();
+    let mut enforcements_to_reverse = Vec::new();
 
-    info!("pending_enforcements: {:?}", data.pending_enforcements);
-    // Find enforcements for this user in this guild
+    // Find pending enforcements for this user in this guild
     for entry in &data.pending_enforcements {
         let pending = entry.value();
-        if !pending.executed && pending.user_id == user_id && pending.guild_id == guild_id {
+        if pending.state == EnforcementState::Pending && 
+           pending.user_id == user_id && 
+           pending.guild_id == guild_id {
             enforcements_to_execute.push(pending.id.clone());
         }
     }
+    
+    // Find active enforcements for this user that might need reversal
+    for entry in &data.active_enforcements {
+        let active = entry.value();
+        if active.state == EnforcementState::Active && 
+           active.user_id == user_id && 
+           active.guild_id == guild_id {
+            enforcements_to_reverse.push(active.id.clone());
+        }
+    }
 
-    // Execute each enforcement
-    let enforcements_to_execute_clone = enforcements_to_execute.clone();
-
-    for id in enforcements_to_execute_clone {
-        execute_enforcement(http, data, &id).await?;
+    // Execute pending enforcements
+    for id in &enforcements_to_execute {
+        execute_enforcement(http, data, id).await?;
+    }
+    
+    // Check if active enforcements should be reversed
+    for id in &enforcements_to_reverse {
+        // Only reverse if the time has come
+        if let Some(active) = data.active_enforcements.get(id) {
+            if let Some(reverse_at_str) = &active.reverse_at {
+                if let Ok(reverse_at) = DateTime::parse_from_rfc3339(reverse_at_str) {
+                    if reverse_at.with_timezone(&Utc) <= Utc::now() {
+                        // Drop the borrow before calling reverse_enforcement
+                        drop(active);
+                        reverse_enforcement(http, data, id).await?;
+                    }
+                }
+            }
+        }
     }
 
     // Save updated data
-    if !enforcements_to_execute.is_empty() {
+    if !enforcements_to_execute.is_empty() || !enforcements_to_reverse.is_empty() {
         if let Err(e) = data.save().await {
-            error!(
-                "Failed to save data after executing user enforcements: {}",
-                e
-            );
+            error!("Failed to save data after executing user enforcements: {e}");
         }
     }
 
     Ok(())
 }
 
-/// Check a specific enforcement
+/// Check a specific enforcement by ID
 async fn check_specific_enforcement(
     http: &Http,
     data: &Data,
     enforcement_id: &str,
 ) -> Result<(), Error> {
+    // First check pending enforcements
     if let Some(pending) = data.pending_enforcements.get(enforcement_id) {
-        if !pending.executed {
+        if pending.state == EnforcementState::Pending {
             let id = pending.id.clone();
             drop(pending); // Drop the borrow before calling execute_enforcement
             execute_enforcement(http, data, &id).await?;
-
+            
             // Save data
             if let Err(e) = data.save().await {
-                error!(
-                    "Failed to save data after executing specific enforcement: {}",
-                    e
-                );
+                error!("Failed to save data after executing specific enforcement: {e}");
+            }
+            return Ok(());
+        }
+    }
+    
+    // Then check active enforcements
+    if let Some(active) = data.active_enforcements.get(enforcement_id) {
+        // Only reverse if it's time
+        if active.state == EnforcementState::Active && active.reverse_at.is_some() {
+            let should_reverse = if let Some(reverse_at_str) = &active.reverse_at {
+                if let Ok(reverse_at) = DateTime::parse_from_rfc3339(reverse_at_str) {
+                    reverse_at.with_timezone(&Utc) <= Utc::now()
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
+            
+            if should_reverse {
+                let id = active.id.clone();
+                drop(active); // Drop the borrow before calling reverse_enforcement
+                reverse_enforcement(http, data, &id).await?;
+                
+                // Save data
+                if let Err(e) = data.save().await {
+                    error!("Failed to save data after reversing specific enforcement: {e}");
+                }
+                return Ok(());
             }
         }
-    } else {
-        warn!("Enforcement with ID {} not found", enforcement_id);
     }
 
+    // If we reach here, the enforcement wasn't found or doesn't need action
+    warn!("Enforcement with ID {enforcement_id} not found or no action needed");
     Ok(())
 }
 
@@ -260,7 +330,6 @@ async fn handle_mute_action(
     is_executed: bool,
 ) -> Result<(), Error> {
     if is_executed {
-        // Remove the mute (automatic by Discord based on timestamp)
         info!("Mute period expired for user {user_id} in guild {guild_id}");
         return Ok(());
     }
@@ -354,7 +423,6 @@ async fn handle_voice_mute_action(
     duration: &Option<u64>,
     is_executed: bool,
 ) -> Result<(), Error> {
-    use poise::serenity_prelude::builder::EditMember;
 
     if !is_executed {
         // Apply voice mute
@@ -472,19 +540,16 @@ async fn get_user_voice_channel(
     guild_id: GuildId,
     user_id: UserId,
 ) -> Option<ChannelId> {
-    let guild = cache_http.cache().map(|g| g.guild(guild_id)).flatten();
-    let guild = match guild {
-        Some(g) => g,
-        None => {
-            error!("Guild {guild_id} not found in cache");
-            return None;
-        }
-    };
-
-    guild
-        .voice_states
-        .get(&user_id)
-        .and_then(|voice_state| voice_state.channel_id)
+    let guild = cache_http.cache().and_then(|g| g.guild(guild_id));
+    if let Some(guild) = guild {
+        guild
+            .voice_states
+            .get(&user_id)
+            .and_then(|voice_state| voice_state.channel_id)
+    } else {
+        error!("Guild {guild_id} not found in cache");
+        None
+    }
 }
 
 /// Get all voice channels in a guild
@@ -676,17 +741,98 @@ async fn teleport_user(
     }
 }
 
-/// Execute a specific enforcement action
+/// Reverse an active enforcement action
+async fn reverse_enforcement(http: &Http, data: &Data, enforcement_id: &str) -> Result<(), Error> {
+    if let Some(mut active) = data.active_enforcements.get_mut(enforcement_id) {
+        let guild_id = GuildId::new(active.guild_id);
+        let user_id = UserId::new(active.user_id);
+        let now = Utc::now().to_rfc3339();
+        
+        // Apply the reversal action based on the enforcement type
+        match &active.action {
+            EnforcementAction::Mute { .. } => {
+                // For Discord timeouts, they're automatically removed by Discord
+                // We just need to mark it as reversed in our system
+                info!("Timeout period expired for user {user_id} in guild {guild_id}");
+            }
+            EnforcementAction::Ban { .. } => {
+                // Unban the user
+                info!("Unbanning user {user_id} in guild {guild_id}");
+                match guild_id.unban(http, user_id).await {
+                    Ok(()) => info!("Successfully unbanned user {user_id}"),
+                    Err(e) => error!("Failed to unban user {user_id}: {e}"),
+                }
+            }
+            EnforcementAction::VoiceMute { .. } => {
+                // Remove voice mute
+                info!("Removing voice mute from user {user_id} in guild {guild_id}");
+                if let Ok((_, mut member)) = get_guild_and_member(http, guild_id, user_id).await {
+                    match member.edit(http, EditMember::new().mute(false)).await {
+                        Ok(()) => info!("Successfully removed voice mute from user {user_id}"),
+                        Err(e) => error!("Failed to remove voice mute from user {user_id}: {e}"),
+                    }
+                }
+            }
+            EnforcementAction::VoiceDeafen { .. } => {
+                // Remove voice deafen
+                info!("Removing voice deafen from user {user_id} in guild {guild_id}");
+                if let Ok((_, mut member)) = get_guild_and_member(http, guild_id, user_id).await {
+                    match member.edit(http, EditMember::new().deafen(false)).await {
+                        Ok(()) => info!("Successfully removed voice deafen from user {user_id}"),
+                        Err(e) => error!("Failed to remove voice deafen from user {user_id}: {e}"),
+                    }
+                }
+            }
+            // These actions don't need reversal as they're one-time actions
+            EnforcementAction::Kick { .. } => {},
+            EnforcementAction::VoiceDisconnect { .. } => {},
+            EnforcementAction::VoiceChannelHaunt { .. } => {},
+            EnforcementAction::None => {},
+        }
+        
+        // Update enforcement state
+        active.state = EnforcementState::Reversed;
+        active.reversed_at = Some(now);
+        active.executed = true; // For backward compatibility
+        
+        // Get the enforcement ID and data for later
+        let id = active.id.clone();
+        let enforcement_data = active.value().clone();
+        let user_id = enforcement_data.user_id;
+        let guild_id = enforcement_data.guild_id;
+        drop(active); // Drop the mutable borrow
+        
+        // Move enforcement to completed map
+        data.active_enforcements.remove(&id);
+        data.completed_enforcements.insert(id.clone(), enforcement_data);
+        
+        info!(
+            target: crate::COMMAND_TARGET,
+            enforcement_id = %id,
+            user_id = %user_id,
+            guild_id = %guild_id,
+            event = "enforcement_reversed",
+            "Enforcement action reversed"
+        );
+    } else {
+        warn!("Active enforcement with ID {enforcement_id} not found for reversal");
+    }
+
+    Ok(())
+}
+
+/// Execute a pending enforcement action
 async fn execute_enforcement(http: &Http, data: &Data, enforcement_id: &str) -> Result<(), Error> {
+    // Try to get and remove the pending enforcement
     if let Some(mut pending) = data.pending_enforcements.get_mut(enforcement_id) {
         let guild_id = GuildId::new(pending.guild_id);
         let user_id = UserId::new(pending.user_id);
-        let is_executed = pending.executed;
-
+        let now = Utc::now().to_rfc3339();
+        
         // Execute the action based on the type
         match &pending.action {
             EnforcementAction::Mute { duration } => {
-                handle_mute_action(http, guild_id, user_id, duration, is_executed).await?;
+                handle_mute_action(http, guild_id, user_id, duration, false).await?;
             }
             EnforcementAction::VoiceChannelHaunt {
                 teleport_count,
@@ -702,45 +848,107 @@ async fn execute_enforcement(http: &Http, data: &Data, enforcement_id: &str) -> 
                     interval,
                     return_to_origin,
                     original_channel_id,
-                    is_executed,
+                    false,
                 )
                 .await?;
             }
             EnforcementAction::Ban { duration } => {
-                handle_ban_action(http, guild_id, user_id, duration, is_executed).await?;
+                handle_ban_action(http, guild_id, user_id, duration, false).await?;
             }
             EnforcementAction::Kick { delay } => {
-                handle_kick_action(http, guild_id, user_id, delay, is_executed).await?;
+                handle_kick_action(http, guild_id, user_id, delay, false).await?;
             }
             EnforcementAction::VoiceMute { duration } => {
-                handle_voice_mute_action(http, guild_id, user_id, duration, is_executed).await?;
+                handle_voice_mute_action(http, guild_id, user_id, duration, false).await?;
             }
             EnforcementAction::VoiceDeafen { duration } => {
-                handle_voice_deafen_action(http, guild_id, user_id, duration, is_executed).await?;
+                handle_voice_deafen_action(http, guild_id, user_id, duration, false).await?;
             }
             EnforcementAction::VoiceDisconnect { delay } => {
-                handle_voice_disconnect_action(
-                    http,
-                    guild_id,
-                    user_id,
-                    delay.as_ref(),
-                    is_executed,
-                )
-                .await?;
+                handle_voice_disconnect_action(http, guild_id, user_id, delay.as_ref(), false).await?;
             }
             EnforcementAction::None => {}
         }
-
-        pending.executed = true;
+        
+        // Calculate when to reverse the action (if applicable)
+        let reverse_at_option = calculate_reversal_time(&pending.action);
+        
+        // Determine if this is a one-time action
+        let is_one_time = match &pending.action {
+            EnforcementAction::Kick { .. } |
+            EnforcementAction::VoiceDisconnect { .. } |
+            EnforcementAction::VoiceChannelHaunt { .. } => true,
+            _ => false
+        };
+        
+        // Determine final state based on the action type and reverse_at
+        let needs_reversal = !is_one_time && reverse_at_option.is_some();
+        
+        // Get the enforcement data we need for logging
+        let id = pending.id.clone();
+        let user_id = pending.user_id;
+        let guild_id = pending.guild_id;
+        
+        // Update enforcement state
+        pending.state = EnforcementState::Active;
+        pending.executed_at = Some(now.clone());
+        pending.executed = true; // For backward compatibility
+        pending.reverse_at = reverse_at_option.clone();
+        
+        // Clone the enforcement data before dropping the borrow
+        let mut enforcement_data = pending.value().clone();
+        drop(pending); // Drop the mutable borrow
+        
+        // Remove from pending enforcements
+        data.pending_enforcements.remove(&id);
+        
+        // Determine where to put the enforcement based on whether it needs reversal
+        if needs_reversal {
+            // For actions that will need reversal, move to active
+            data.active_enforcements.insert(id.clone(), enforcement_data);
+        } else {
+            // For actions that don't need reversal, move directly to completed
+            enforcement_data.state = EnforcementState::Completed;
+            data.completed_enforcements.insert(id.clone(), enforcement_data);
+        }
+        
         info!(
             target: crate::COMMAND_TARGET,
-            enforcement_id = %enforcement_id,
-            user_id = %pending.user_id,
-            guild_id = %pending.guild_id,
+            enforcement_id = %id,
+            user_id = %user_id,
+            guild_id = %guild_id,
             event = "enforcement_executed",
             "Enforcement action executed"
         );
+    } else {
+        warn!("Pending enforcement with ID {enforcement_id} not found");
     }
 
     Ok(())
+}
+
+/// Calculate when an enforcement action should be reversed
+fn calculate_reversal_time(action: &EnforcementAction) -> Option<String> {
+    match action {
+        EnforcementAction::Mute { duration } |
+        EnforcementAction::Ban { duration } |
+        EnforcementAction::VoiceMute { duration } |
+        EnforcementAction::VoiceDeafen { duration } => {
+            if let Some(secs) = duration {
+                if *secs > 0 {
+                    // Add duration to current time
+                    Some((Utc::now() + chrono::Duration::seconds(*secs as i64)).to_rfc3339())
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        },
+        // These actions don't require reversal as they're one-time operations
+        EnforcementAction::Kick { .. } |
+        EnforcementAction::VoiceDisconnect { .. } |
+        EnforcementAction::VoiceChannelHaunt { .. } |
+        EnforcementAction::None => None,
+    }
 }

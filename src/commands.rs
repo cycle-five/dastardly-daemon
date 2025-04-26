@@ -1,7 +1,7 @@
 use crate::{
     Data, Error,
     data::{
-        EnforcementAction, GuildConfig, NotificationMethod, PendingEnforcement, UserWarningState,
+        EnforcementAction, EnforcementState, GuildConfig, NotificationMethod, PendingEnforcement, UserWarningState,
         Warning, WarningContext,
     },
     enforcement::EnforcementCheckRequest,
@@ -70,7 +70,7 @@ fn get_enforcement_action(
             };
 
         // Store the pending enforcement in the user state
-        let key = format!("{}:{}", user_id, guild_id);
+        let key = format!("{user_id}:{guild_id}");
         let mut updated_state = state.clone();
         updated_state.pending_enforcement = Some(enforcement.clone());
         ctx_data.user_warning_states.insert(key, updated_state);
@@ -121,7 +121,7 @@ fn get_enforcement_action(
         };
 
         // Store the enforcement in the user state so it's available for future warnings
-        let key = format!("{}:{}", user_id, guild_id);
+        let key = format!("{user_id}:{guild_id}");
         let mut updated_state = state.clone();
         updated_state.pending_enforcement = Some(enforcement.clone());
         ctx_data.user_warning_states.insert(key, updated_state);
@@ -236,18 +236,15 @@ fn get_moderator_response(
 ) -> String {
     if enforce {
         format!(
-            "Summon recorded for {} with reason: {}. The daemon shall execute judgment!",
-            user_name, reason
+            "Summon recorded for {user_name} with reason: {reason}. The daemon shall execute judgment!",
         )
     } else if warning_count == 1 {
         format!(
-            "First summoning recorded for {} with reason: {}. The daemon is watching...",
-            user_name, reason
+            "First summoning recorded for {user_name} with reason: {reason}. The daemon is watching...",
         )
     } else {
         format!(
-            "Summon recorded for {} with reason: {}. Current warning count: {}. The daemon grows restless...",
-            user_name, reason, warning_count
+            "Summon recorded for {user_name} with reason: {reason}. Current warning count: {warning_count}. The daemon grows restless...",
         )
     }
 }
@@ -742,7 +739,7 @@ pub async fn chaos_ritual(
 
     // If there's a log channel, also log the ritual there
     if let Some(log_channel_id) = guild_config.enforcement_log_channel_id {
-        let content = format!(
+        let msg_content = format!(
             "🔮 **CHAOS RITUAL PERFORMED**\n\n{}\n\nRitual performed by: {}\nChaos Factor: {:.2}\n\n{}",
             demonic_message,
             ctx.author().mention(),
@@ -751,7 +748,7 @@ pub async fn chaos_ritual(
         );
 
         let channel_id = serenity::ChannelId::new(log_channel_id);
-        let message = serenity::CreateMessage::new().content(content);
+        let message = serenity::CreateMessage::new().content(msg_content);
         let _ = channel_id.send_message(&ctx.http(), message).await;
     }
 
@@ -965,32 +962,79 @@ pub async fn appease(
     let mut canceled = false;
     let mut canceled_enforcements = Vec::new();
 
-    // Find pending enforcements for this user in this guild
-    let mut pending_to_cancel = Vec::new();
+    // Find pending enforcements for this user in this guild - both from pending and active maps
+    let mut to_cancel = Vec::new();
+    
+    // Check pending enforcements
     for entry in &ctx.data().pending_enforcements {
         let pending = entry.value();
-        if pending.user_id == user_id && pending.guild_id == guild_id.get() && !pending.executed {
+        if pending.user_id == user_id && pending.guild_id == guild_id.get() && 
+           pending.state == crate::data::EnforcementState::Pending {
             if let Some(ref eid) = enforcement_id {
                 if pending.id == *eid {
-                    pending_to_cancel.push(pending.id.clone());
+                    to_cancel.push((pending.id.clone(), true));
                     canceled_enforcements.push(pending.clone());
                     break;
                 }
             } else {
-                pending_to_cancel.push(pending.id.clone());
+                to_cancel.push((pending.id.clone(), true));
                 canceled_enforcements.push(pending.clone());
+            }
+        }
+    }
+    
+    // Also check active enforcements
+    for entry in &ctx.data().active_enforcements {
+        let active = entry.value();
+        if active.user_id == user_id && active.guild_id == guild_id.get() && 
+           active.state == crate::data::EnforcementState::Active {
+            if let Some(ref eid) = enforcement_id {
+                if active.id == *eid {
+                    to_cancel.push((active.id.clone(), false));
+                    canceled_enforcements.push(active.clone());
+                    break;
+                }
+            } else {
+                to_cancel.push((active.id.clone(), false));
+                canceled_enforcements.push(active.clone());
             }
         }
     }
 
     // Cancel the found enforcements
-    for id in pending_to_cancel {
-        if let Some(mut pending) = ctx.data().pending_enforcements.get_mut(&id) {
-            pending.executed = true;
-            canceled = true;
-
-            // Notify the enforcement task that this enforcement has been canceled
-            notify_enforcement_task_by_id(&ctx, id.clone()).await;
+    for (id, is_pending) in to_cancel {
+        if is_pending {
+            if let Some(mut pending) = ctx.data().pending_enforcements.get_mut(&id) {
+                pending.state = crate::data::EnforcementState::Cancelled;
+                pending.executed = true; // For backward compatibility
+                
+                // Move to completed enforcements
+                let enforcement_data = pending.value().clone();
+                drop(pending);
+                ctx.data().pending_enforcements.remove(&id);
+                ctx.data().completed_enforcements.insert(id.clone(), enforcement_data);
+                
+                canceled = true;
+                
+                // Notify the enforcement task
+                notify_enforcement_task_by_id(&ctx, id).await;
+            }
+        } else {
+            if let Some(mut active) = ctx.data().active_enforcements.get_mut(&id) {
+                active.state = crate::data::EnforcementState::Cancelled;
+                active.executed = true; // For backward compatibility
+                
+                // Move to completed enforcements
+                let enforcement_data = active.value().clone();
+                drop(active);
+                ctx.data().active_enforcements.remove(&id);
+                ctx.data().completed_enforcements.insert(id.clone(), enforcement_data);
+                
+                canceled = true;
+                
+                // Notify the enforcement task
+                notify_enforcement_task_by_id(&ctx, id).await;
+            }
         }
     }
 
@@ -1262,6 +1306,7 @@ async fn create_pending_enforcement(
 ) -> String {
     let enforcement_id = Uuid::new_v4().to_string();
     let execute_at = calculate_execute_at(&action);
+    let now = Utc::now().to_rfc3339();
 
     let pending = PendingEnforcement {
         id: enforcement_id.clone(),
@@ -1270,7 +1315,12 @@ async fn create_pending_enforcement(
         guild_id,
         action,
         execute_at: execute_at.to_rfc3339(),
-        executed: false,
+        reverse_at: None, // Will be set when executed if needed
+        state: EnforcementState::Pending,
+        created_at: now,
+        executed_at: None,
+        reversed_at: None,
+        executed: false, // For backward compatibility
     };
 
     ctx.data()

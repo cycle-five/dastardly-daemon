@@ -142,7 +142,28 @@ impl Display for WarningContext {
     }
 }
 
-/// Represents a pending enforcement action
+/// Enforcement lifecycle states
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EnforcementState {
+    /// Not yet executed
+    Pending,
+    /// Applied but waiting for duration to expire
+    Active,
+    /// Action has been reversed (for timed actions)
+    Reversed,
+    /// Fully completed with no further action needed
+    Completed,
+    /// Manually cancelled by moderator
+    Cancelled,
+}
+
+impl Default for EnforcementState {
+    fn default() -> Self {
+        Self::Pending
+    }
+}
+
+/// Represents an enforcement action
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PendingEnforcement {
     pub id: String,
@@ -151,7 +172,12 @@ pub struct PendingEnforcement {
     pub guild_id: u64,
     pub action: EnforcementAction,
     pub execute_at: String,
-    pub executed: bool,
+    pub reverse_at: Option<String>,  // When to automatically reverse the action
+    pub state: EnforcementState,
+    pub created_at: String,
+    pub executed_at: Option<String>,
+    pub reversed_at: Option<String>,
+    pub executed: bool, // Legacy field for backward compatibility
 }
 
 /// Tracks warning state for a user, used for the weighted warning system
@@ -368,13 +394,19 @@ pub struct DataInner {
     pub cache: Arc<serenity::Cache>,
     // Map of warning_id -> warning
     pub warnings: DashMap<String, Warning>,
-    // Map of enforcement_id -> pending enforcement
+    // Map of enforcement_id -> pending enforcement (not yet executed)
     pub pending_enforcements: DashMap<String, PendingEnforcement>,
+    // Map of enforcement_id -> active enforcement (executed but not reversed/completed)
+    pub active_enforcements: DashMap<String, PendingEnforcement>,
+    // Map of enforcement_id -> completed enforcement (history)
+    pub completed_enforcements: DashMap<String, PendingEnforcement>,
     // Map of user_id+guild_id -> user warning state
     pub user_warning_states: DashMap<String, UserWarningState>,
     // Channel to send enforcement check requests
     pub enforcement_tx: Arc<Option<Sender<EnforcementCheckRequest>>>,
 }
+
+
 
 impl Default for DataInner {
     fn default() -> Self {
@@ -391,6 +423,8 @@ impl DataInner {
             cache: Arc::new(serenity::Cache::default()),
             warnings: DashMap::new(),
             pending_enforcements: DashMap::new(),
+            active_enforcements: DashMap::new(),
+            completed_enforcements: DashMap::new(),
             user_warning_states: DashMap::new(),
             enforcement_tx: Arc::new(None),
         }
@@ -434,9 +468,40 @@ impl DataInner {
         if let Ok(file_content) = tokio::fs::read_to_string(ENFORCEMENTS_FILE).await {
             if let Ok(enforcements) = serde_yaml::from_str::<Vec<PendingEnforcement>>(&file_content)
             {
-                for enforcement in enforcements {
-                    data.pending_enforcements
-                        .insert(enforcement.id.clone(), enforcement);
+                for mut enforcement in enforcements {
+                    // Add new fields for backward compatibility if they don't exist
+                    if enforcement.reverse_at.is_none() {
+                        enforcement.reverse_at = None;
+                    }
+                    if enforcement.executed_at.is_none() {
+                        enforcement.executed_at = None;
+                    }
+                    if enforcement.reversed_at.is_none() {
+                        enforcement.reversed_at = None;
+                    }
+                    if enforcement.created_at.is_empty() {
+                        enforcement.created_at = chrono::Utc::now().to_rfc3339();
+                    }
+                    
+                    // Set state based on legacy executed field
+                    if enforcement.executed {
+                        enforcement.state = EnforcementState::Completed;
+                    } else {
+                        enforcement.state = EnforcementState::Pending;
+                    }
+                    
+                    // Store in the appropriate map based on state
+                    match enforcement.state {
+                        EnforcementState::Pending => {
+                            data.pending_enforcements.insert(enforcement.id.clone(), enforcement);
+                        }
+                        EnforcementState::Active => {
+                            data.active_enforcements.insert(enforcement.id.clone(), enforcement);
+                        }
+                        _ => {
+                            data.completed_enforcements.insert(enforcement.id.clone(), enforcement);
+                        }
+                    }
                 }
             }
         }
@@ -499,13 +564,31 @@ impl DataInner {
         let warnings_yaml = serde_yaml::to_string(&warnings)?;
         tokio::fs::write(WARNINGS_FILE, warnings_yaml).await?;
 
-        // Save pending enforcements
-        let enforcements: Vec<PendingEnforcement> = self
+        // Save all enforcements to a single file for backward compatibility
+        let mut all_enforcements = Vec::new();
+        
+        // Add pending enforcements
+        all_enforcements.extend(self
             .pending_enforcements
             .iter()
             .map(|entry| entry.value().clone())
-            .collect();
-        let enforcements_yaml = serde_yaml::to_string(&enforcements)?;
+            .collect::<Vec<PendingEnforcement>>());
+            
+        // Add active enforcements
+        all_enforcements.extend(self
+            .active_enforcements
+            .iter()
+            .map(|entry| entry.value().clone())
+            .collect::<Vec<PendingEnforcement>>());
+            
+        // Add completed enforcements
+        all_enforcements.extend(self
+            .completed_enforcements
+            .iter()
+            .map(|entry| entry.value().clone())
+            .collect::<Vec<PendingEnforcement>>());
+            
+        let enforcements_yaml = serde_yaml::to_string(&all_enforcements)?;
         tokio::fs::write(ENFORCEMENTS_FILE, enforcements_yaml).await?;
 
         // Save user warning states
@@ -640,6 +723,11 @@ mod tests {
                 duration: Some(604800),
             },
             execute_at: "2023-01-02T00:00:00Z".to_string(),
+            reverse_at: Some("2023-01-09T00:00:00Z".to_string()),
+            state: EnforcementState::Pending,
+            created_at: "2023-01-01T00:00:00Z".to_string(),
+            executed_at: None,
+            reversed_at: None,
             executed: false,
         };
 
