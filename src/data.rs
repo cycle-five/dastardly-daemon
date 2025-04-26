@@ -172,7 +172,7 @@ pub struct PendingEnforcement {
     pub guild_id: u64,
     pub action: EnforcementAction,
     pub execute_at: String,
-    pub reverse_at: Option<String>,  // When to automatically reverse the action
+    pub reverse_at: Option<String>, // When to automatically reverse the action
     pub state: EnforcementState,
     pub created_at: String,
     pub executed_at: Option<String>,
@@ -406,8 +406,6 @@ pub struct DataInner {
     pub enforcement_tx: Arc<Option<Sender<EnforcementCheckRequest>>>,
 }
 
-
-
 impl Default for DataInner {
     fn default() -> Self {
         Self::new()
@@ -482,24 +480,27 @@ impl DataInner {
                     if enforcement.created_at.is_empty() {
                         enforcement.created_at = chrono::Utc::now().to_rfc3339();
                     }
-                    
+
                     // Set state based on legacy executed field
                     if enforcement.executed {
                         enforcement.state = EnforcementState::Completed;
                     } else {
                         enforcement.state = EnforcementState::Pending;
                     }
-                    
+
                     // Store in the appropriate map based on state
                     match enforcement.state {
                         EnforcementState::Pending => {
-                            data.pending_enforcements.insert(enforcement.id.clone(), enforcement);
+                            data.pending_enforcements
+                                .insert(enforcement.id.clone(), enforcement);
                         }
                         EnforcementState::Active => {
-                            data.active_enforcements.insert(enforcement.id.clone(), enforcement);
+                            data.active_enforcements
+                                .insert(enforcement.id.clone(), enforcement);
                         }
                         _ => {
-                            data.completed_enforcements.insert(enforcement.id.clone(), enforcement);
+                            data.completed_enforcements
+                                .insert(enforcement.id.clone(), enforcement);
                         }
                     }
                 }
@@ -566,28 +567,31 @@ impl DataInner {
 
         // Save all enforcements to a single file for backward compatibility
         let mut all_enforcements = Vec::new();
-        
+
         // Add pending enforcements
-        all_enforcements.extend(self
-            .pending_enforcements
-            .iter()
-            .map(|entry| entry.value().clone())
-            .collect::<Vec<PendingEnforcement>>());
-            
+        all_enforcements.extend(
+            self.pending_enforcements
+                .iter()
+                .map(|entry| entry.value().clone())
+                .collect::<Vec<PendingEnforcement>>(),
+        );
+
         // Add active enforcements
-        all_enforcements.extend(self
-            .active_enforcements
-            .iter()
-            .map(|entry| entry.value().clone())
-            .collect::<Vec<PendingEnforcement>>());
-            
+        all_enforcements.extend(
+            self.active_enforcements
+                .iter()
+                .map(|entry| entry.value().clone())
+                .collect::<Vec<PendingEnforcement>>(),
+        );
+
         // Add completed enforcements
-        all_enforcements.extend(self
-            .completed_enforcements
-            .iter()
-            .map(|entry| entry.value().clone())
-            .collect::<Vec<PendingEnforcement>>());
-            
+        all_enforcements.extend(
+            self.completed_enforcements
+                .iter()
+                .map(|entry| entry.value().clone())
+                .collect::<Vec<PendingEnforcement>>(),
+        );
+
         let enforcements_yaml = serde_yaml::to_string(&all_enforcements)?;
         tokio::fs::write(ENFORCEMENTS_FILE, enforcements_yaml).await?;
 

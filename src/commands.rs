@@ -1,8 +1,8 @@
 use crate::{
     Data, Error,
     data::{
-        EnforcementAction, EnforcementState, GuildConfig, NotificationMethod, PendingEnforcement, UserWarningState,
-        Warning, WarningContext,
+        EnforcementAction, EnforcementState, GuildConfig, NotificationMethod, PendingEnforcement,
+        UserWarningState, Warning, WarningContext,
     },
     enforcement::EnforcementCheckRequest,
 };
@@ -964,12 +964,14 @@ pub async fn appease(
 
     // Find pending enforcements for this user in this guild - both from pending and active maps
     let mut to_cancel = Vec::new();
-    
+
     // Check pending enforcements
     for entry in &ctx.data().pending_enforcements {
         let pending = entry.value();
-        if pending.user_id == user_id && pending.guild_id == guild_id.get() && 
-           pending.state == crate::data::EnforcementState::Pending {
+        if pending.user_id == user_id
+            && pending.guild_id == guild_id.get()
+            && pending.state == crate::data::EnforcementState::Pending
+        {
             if let Some(ref eid) = enforcement_id {
                 if pending.id == *eid {
                     to_cancel.push((pending.id.clone(), true));
@@ -982,12 +984,14 @@ pub async fn appease(
             }
         }
     }
-    
+
     // Also check active enforcements
     for entry in &ctx.data().active_enforcements {
         let active = entry.value();
-        if active.user_id == user_id && active.guild_id == guild_id.get() && 
-           active.state == crate::data::EnforcementState::Active {
+        if active.user_id == user_id
+            && active.guild_id == guild_id.get()
+            && active.state == crate::data::EnforcementState::Active
+        {
             if let Some(ref eid) = enforcement_id {
                 if active.id == *eid {
                     to_cancel.push((active.id.clone(), false));
@@ -1007,34 +1011,36 @@ pub async fn appease(
             if let Some(mut pending) = ctx.data().pending_enforcements.get_mut(&id) {
                 pending.state = crate::data::EnforcementState::Cancelled;
                 pending.executed = true; // For backward compatibility
-                
+
                 // Move to completed enforcements
                 let enforcement_data = pending.value().clone();
                 drop(pending);
                 ctx.data().pending_enforcements.remove(&id);
-                ctx.data().completed_enforcements.insert(id.clone(), enforcement_data);
-                
+                ctx.data()
+                    .completed_enforcements
+                    .insert(id.clone(), enforcement_data);
+
                 canceled = true;
-                
+
                 // Notify the enforcement task
                 notify_enforcement_task_by_id(&ctx, id).await;
             }
-        } else {
-            if let Some(mut active) = ctx.data().active_enforcements.get_mut(&id) {
-                active.state = crate::data::EnforcementState::Cancelled;
-                active.executed = true; // For backward compatibility
-                
-                // Move to completed enforcements
-                let enforcement_data = active.value().clone();
-                drop(active);
-                ctx.data().active_enforcements.remove(&id);
-                ctx.data().completed_enforcements.insert(id.clone(), enforcement_data);
-                
-                canceled = true;
-                
-                // Notify the enforcement task
-                notify_enforcement_task_by_id(&ctx, id).await;
-            }
+        } else if let Some(mut active) = ctx.data().active_enforcements.get_mut(&id) {
+            active.state = crate::data::EnforcementState::Cancelled;
+            active.executed = true; // For backward compatibility
+
+            // Move to completed enforcements
+            let enforcement_data = active.value().clone();
+            drop(active);
+            ctx.data().active_enforcements.remove(&id);
+            ctx.data()
+                .completed_enforcements
+                .insert(id.clone(), enforcement_data);
+
+            canceled = true;
+
+            // Notify the enforcement task
+            notify_enforcement_task_by_id(&ctx, id).await;
         }
     }
 
