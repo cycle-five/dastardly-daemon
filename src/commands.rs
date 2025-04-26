@@ -24,93 +24,134 @@ pub async fn ping(ctx: Context<'_, Data, Error>) -> Result<(), Error> {
     Ok(())
 }
 
-/// Summon the daemon to judge a user's behavior and apply appropriate consequences
-#[command(
-    slash_command,
-    guild_only,
-    ephemeral,
-    required_permissions = "KICK_MEMBERS|BAN_MEMBERS|MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS|SEND_MESSAGES",
-    required_bot_permissions = "KICK_MEMBERS|BAN_MEMBERS|MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS|SEND_MESSAGES",
-    default_member_permissions = "KICK_MEMBERS|BAN_MEMBERS|MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS|SEND_MESSAGES"
-)]
-pub async fn summon_daemon(
-    ctx: Context<'_, Data, Error>,
-    #[description = "User to warn"] user: User,
-    #[description = "Reason for warning"] reason: String,
-    #[description = "Infraction type (text, voice, server)"] infraction_type: Option<String>,
-    #[description = "Notification method (dm, public)"] notification: Option<String>,
-) -> Result<(), Error> {
-    ctx.defer().await?;
-    let guild_id = ctx
-        .guild_id()
-        .ok_or("This command must be used in a guild")?;
-
-    // Get guild configuration
-    let guild_config = get_guild_config(&ctx, guild_id);
-
-    // Determine infraction category
-    let infraction_type = infraction_type
-        .unwrap_or_else(|| "voice".to_string())
-        .to_lowercase();
-
-    // Determine notification method
-    let notification_method = match notification.as_deref() {
+// Helper function to determine the appropriate notification method
+fn get_notification_method(
+    notification: Option<&str>,
+    guild_config: &GuildConfig,
+) -> NotificationMethod {
+    match notification {
         Some("dm" | "DM") => NotificationMethod::DirectMessage,
         Some("public" | "Public") => NotificationMethod::PublicWithMention,
-        _ => guild_config.default_notification_method,
-    };
+        _ => guild_config.default_notification_method.clone(),
+    }
+}
 
-    // Record this warning in the user's warning state
-    let user_id = user.id.get();
-    let mod_id = ctx.author().id.get();
-    let state =
-        ctx.data()
-            .add_to_user_warning_state(user_id, guild_id.get(), reason.clone(), mod_id);
-
-    // Calculate the warning score
-    let score = ctx.data().calculate_warning_score(user_id, guild_id.get());
-
-    // Add randomness based on the chaos factor
-    let random_factor: f64 = {
-        let mut rng = rand::thread_rng();
-        rand::Rng::gen_range(&mut rng, 0.0..f64::from(guild_config.chaos_factor))
-    };
-    let adjusted_score = score + random_factor;
-
-    let enforce = adjusted_score > WARNING_THRESHOLD;
-    let enforcement_action = if state.pending_enforcement.is_some() {
+// Helper function to determine the appropriate enforcement action
+fn get_enforcement_action(
+    state: &UserWarningState,
+    infraction_type: &str,
+    guild_config: &GuildConfig,
+    user_id: u64,
+    guild_id: u64,
+    ctx_data: &Data,
+) -> Option<EnforcementAction> {
+    if state.pending_enforcement.is_some() {
         // Use the pending enforcement that was set on first warning
         state.pending_enforcement.clone()
     } else if state.warning_timestamps.len() == 1 {
         // This is the first warning, set a pending enforcement based on infraction type
-        let enforcement = match infraction_type.as_str() {
-            "voice" => guild_config
-                .default_enforcement
-                .unwrap_or(EnforcementAction::VoiceMute {
-                    duration: Some(300),
-                }),
-            "server" => guild_config
-                .default_enforcement
-                .unwrap_or(EnforcementAction::Kick { delay: Some(0) }),
-            _ => guild_config // text
-                .default_enforcement
-                .unwrap_or(EnforcementAction::Mute {
-                    duration: Some(300),
-                }),
-        };
+        let enforcement =
+            match infraction_type {
+                "voice" => guild_config.default_enforcement.clone().unwrap_or(
+                    EnforcementAction::VoiceMute {
+                        duration: Some(300),
+                    },
+                ),
+                "server" => guild_config
+                    .default_enforcement
+                    .clone()
+                    .unwrap_or(EnforcementAction::Kick { delay: Some(0) }),
+                _ => guild_config // text
+                    .default_enforcement
+                    .clone()
+                    .unwrap_or(EnforcementAction::Mute {
+                        duration: Some(300),
+                    }),
+            };
 
         // Store the pending enforcement in the user state
-        let key = format!("{}:{}", user_id, guild_id.get());
+        let key = format!("{}:{}", user_id, guild_id);
         let mut updated_state = state.clone();
         updated_state.pending_enforcement = Some(enforcement.clone());
-        ctx.data().user_warning_states.insert(key, updated_state);
+        ctx_data.user_warning_states.insert(key, updated_state);
 
         Some(enforcement)
     } else {
-        None
-    };
+        // For repeat offenders without a pending enforcement, we need to set an appropriate
+        // enforcement action. This fixes the issue where repeat offenders would face no
+        // consequences if they didn't have a pending enforcement from their first warning.
+        let enforcement = match infraction_type {
+            "voice" => {
+                // For voice infractions, randomly select between different voice-related actions
+                let mut rng = rand::thread_rng();
+                let action_choice = rand::Rng::gen_range(&mut rng, 0..4); // 0-3 for four possible actions
 
-    // Create a warning UUID for tracking
+                match action_choice {
+                    0 => EnforcementAction::VoiceChannelHaunt {
+                        teleport_count: Some(5),       // More teleports for repeat offenders
+                        interval: Some(8),             // Quicker teleports
+                        return_to_origin: Some(false), // Don't return them to their original channel
+                        original_channel_id: None,
+                    },
+                    1 => EnforcementAction::VoiceDeafen {
+                        duration: Some(900), // 15 minutes of deafening
+                    },
+                    2 => EnforcementAction::VoiceDisconnect {
+                        delay: Some(0), // Immediate disconnection
+                    },
+                    _ => EnforcementAction::VoiceMute {
+                        duration: Some(1200), // 20 minutes of voice mute
+                    },
+                }
+            }
+            "server" => {
+                guild_config
+                    .default_enforcement
+                    .clone()
+                    .unwrap_or(EnforcementAction::Ban {
+                        duration: Some(3600), // Escalate to ban for repeat server infractions
+                    })
+            }
+            _ => guild_config // text
+                .default_enforcement
+                .clone()
+                .unwrap_or(EnforcementAction::Mute {
+                    duration: Some(600), // Longer duration for repeat offenders
+                }),
+        };
+
+        // Store the enforcement in the user state so it's available for future warnings
+        let key = format!("{}:{}", user_id, guild_id);
+        let mut updated_state = state.clone();
+        updated_state.pending_enforcement = Some(enforcement.clone());
+        ctx_data.user_warning_states.insert(key, updated_state);
+
+        Some(enforcement)
+    }
+}
+
+// Helper function to calculate the warning score with randomness
+fn calculate_adjusted_warning_score(base_score: f64, chaos_factor: f32) -> (f64, f64) {
+    // Add randomness based on the chaos factor
+    let random_factor: f64 = {
+        let mut rng = rand::thread_rng();
+        rand::Rng::gen_range(&mut rng, 0.0..f64::from(chaos_factor))
+    };
+    let adjusted_score = base_score + random_factor;
+
+    (adjusted_score, random_factor)
+}
+
+// Helper function to create and store a warning
+fn create_and_insert_warning(
+    ctx_data: &Data,
+    user_id: u64,
+    issuer_id: u64,
+    guild_id: u64,
+    reason: String,
+    notification_method: NotificationMethod,
+    enforcement_action: Option<EnforcementAction>,
+) -> (String, String) {
     let warning_id = uuid::Uuid::new_v4().to_string();
     let now = chrono::Utc::now().to_rfc3339();
 
@@ -118,67 +159,28 @@ pub async fn summon_daemon(
     let warning = Warning {
         id: warning_id.clone(),
         user_id,
-        issuer_id: mod_id,
-        guild_id: guild_id.get(),
-        reason: reason.clone(),
+        issuer_id,
+        guild_id,
+        reason,
         timestamp: now.clone(),
-        notification_method: notification_method.clone(),
-        enforcement: enforcement_action.clone(),
+        notification_method,
+        enforcement: enforcement_action,
     };
 
     // Store warning
-    ctx.data().warnings.insert(warning_id.clone(), warning);
+    ctx_data.warnings.insert(warning_id.clone(), warning);
 
-    // Generate a demonic response based on the context
-    let is_voice = infraction_type == "voice";
-    let response_type = if enforce {
-        crate::llm::ResponseType::Punishment
-    } else if state.warning_timestamps.len() == 1 {
-        crate::llm::ResponseType::Summoning
-    } else {
-        crate::llm::ResponseType::Warning
-    };
+    (warning_id, now)
+}
 
-    // Create context for LLM
-    // let context = format!(
-    //     "User: {}. Infraction: {}. Reason: {}. Warning count: {}. Score: {:.2}. Enforcing: {}.",
-    //     user.name,
-    //     infraction_type,
-    //     reason,
-    //     state.warning_timestamps.len(),
-    //     adjusted_score,
-    //     enforce
-    // );
-    let warning_context = WarningContext {
-        user_name: user.name.clone(),
-        num_warn: state.warning_timestamps.len() as u64,
-        voice_warnings: ctx.data().get_warnings(),
-        warning_score: adjusted_score,
-        warning_threshold: WARNING_THRESHOLD,
-        mod_name: ctx.author().name.clone(),
-    };
-
-    // Generate a demonic message based on the context
-    let demonic_message =
-        generate_daemon_response(&warning_context.to_string(), Some(&state), response_type).await;
-
-    // Notify the user via the enforcement log channel
-    if let Some(log_channel_id) = guild_config.enforcement_log_channel_id {
-        log_daemon_warning(
-            &ctx,
-            log_channel_id,
-            &user,
-            &reason,
-            &infraction_type,
-            &state,
-            &enforcement_action,
-            enforce,
-            &demonic_message,
-        )
-        .await;
-    }
-
-    // Notify user based on notification method and infraction type
+// Helper function to notify the target user
+async fn notify_target_user(
+    ctx: &Context<'_, Data, Error>,
+    user: &User,
+    is_voice: bool,
+    notification_method: &NotificationMethod,
+    demonic_message: &str,
+) -> Result<(), Error> {
     match notification_method {
         NotificationMethod::DirectMessage => {
             if let Ok(channel) = user.create_dm_channel(&ctx.http()).await {
@@ -222,9 +224,154 @@ pub async fn summon_daemon(
         }
     }
 
+    Ok(())
+}
+
+// Helper function to generate message for moderator
+fn get_moderator_response(
+    enforce: bool,
+    warning_count: usize,
+    user_name: &str,
+    reason: &str,
+) -> String {
+    if enforce {
+        format!(
+            "Summon recorded for {} with reason: {}. The daemon shall execute judgment!",
+            user_name, reason
+        )
+    } else if warning_count == 1 {
+        format!(
+            "First summoning recorded for {} with reason: {}. The daemon is watching...",
+            user_name, reason
+        )
+    } else {
+        format!(
+            "Summon recorded for {} with reason: {}. Current warning count: {}. The daemon grows restless...",
+            user_name, reason, warning_count
+        )
+    }
+}
+
+/// Summon the daemon to judge a user's behavior and apply appropriate consequences
+#[command(
+    slash_command,
+    guild_only,
+    ephemeral,
+    required_permissions = "KICK_MEMBERS|BAN_MEMBERS|MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS|SEND_MESSAGES",
+    required_bot_permissions = "KICK_MEMBERS|BAN_MEMBERS|MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS|SEND_MESSAGES",
+    default_member_permissions = "KICK_MEMBERS|BAN_MEMBERS|MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS|SEND_MESSAGES"
+)]
+pub async fn summon_daemon(
+    ctx: Context<'_, Data, Error>,
+    #[description = "User to warn"] user: User,
+    #[description = "Reason for warning"] reason: String,
+    #[description = "Infraction type (text, voice, server)"] infraction_type: Option<String>,
+    #[description = "Notification method (dm, public)"] notification: Option<String>,
+) -> Result<(), Error> {
+    ctx.defer().await?;
+    let guild_id = ctx
+        .guild_id()
+        .ok_or("This command must be used in a guild")?;
+
+    // Get guild configuration
+    let guild_config = get_guild_config(&ctx, guild_id);
+
+    // Determine infraction category
+    let infraction_type = infraction_type
+        .unwrap_or_else(|| "voice".to_string())
+        .to_lowercase();
+
+    // Determine notification method
+    let notification_method = get_notification_method(notification.as_deref(), &guild_config);
+
+    // Record this warning in the user's warning state
+    let user_id = user.id.get();
+    let mod_id = ctx.author().id.get();
+    let state =
+        ctx.data()
+            .add_to_user_warning_state(user_id, guild_id.get(), reason.clone(), mod_id);
+
+    // Calculate the warning score
+    let base_score = ctx.data().calculate_warning_score(user_id, guild_id.get());
+    let (adjusted_score, _) =
+        calculate_adjusted_warning_score(base_score, guild_config.chaos_factor);
+
+    // Determine if we should enforce
+    let enforce = adjusted_score > WARNING_THRESHOLD;
+
+    // Get the appropriate enforcement action
+    let enforcement_action = get_enforcement_action(
+        &state,
+        &infraction_type,
+        &guild_config,
+        user_id,
+        guild_id.get(),
+        ctx.data(),
+    );
+
+    // Create and store warning
+    let (warning_id, _) = create_and_insert_warning(
+        ctx.data(),
+        user_id,
+        mod_id,
+        guild_id.get(),
+        reason.clone(),
+        notification_method.clone(),
+        enforcement_action.clone(),
+    );
+
+    // Generate a demonic response
+    let is_voice = infraction_type == "voice";
+    let response_type = if enforce {
+        crate::llm::ResponseType::Punishment
+    } else if state.warning_timestamps.len() == 1 {
+        crate::llm::ResponseType::Summoning
+    } else {
+        crate::llm::ResponseType::Warning
+    };
+
+    // Create context for LLM
+    let warning_context = WarningContext {
+        user_name: user.name.clone(),
+        num_warn: state.warning_timestamps.len() as u64,
+        voice_warnings: ctx.data().get_warnings(),
+        warning_score: adjusted_score,
+        warning_threshold: WARNING_THRESHOLD,
+        mod_name: ctx.author().name.clone(),
+    };
+
+    // Generate a demonic message based on the context
+    let demonic_message =
+        generate_daemon_response(&warning_context.to_string(), Some(&state), response_type).await;
+
+    // Log to Discord if configured
+    if let Some(log_channel_id) = guild_config.enforcement_log_channel_id {
+        log_daemon_warning(
+            &ctx,
+            log_channel_id,
+            &user,
+            &reason,
+            &infraction_type,
+            &state,
+            &enforcement_action,
+            enforce,
+            &demonic_message,
+        )
+        .await;
+    }
+
+    // Notify the target user
+    notify_target_user(
+        &ctx,
+        &user,
+        is_voice,
+        &notification_method,
+        &demonic_message,
+    )
+    .await?;
+
     // If enforcing, create or update the enforcement
     if enforce && enforcement_action.is_some() {
-        // Create pending enforcement and notify
         if let Some(action) = enforcement_action {
             create_and_notify_enforcement(&ctx, warning_id, user_id, guild_id.get(), action).await;
         }
@@ -234,24 +381,8 @@ pub async fn summon_daemon(
     let _ = save_data(&ctx, "daemon summon").await;
 
     // Respond to the moderator
-    let response = if enforce {
-        format!(
-            "Summon recorded for {} with reason: {}. The daemon shall execute judgment!",
-            user.name, reason
-        )
-    } else if state.warning_timestamps.len() == 1 {
-        format!(
-            "First summoning recorded for {} with reason: {}. The daemon is watching...",
-            user.name, reason
-        )
-    } else {
-        format!(
-            "Summon recorded for {} with reason: {}. Current warning count: {}. The daemon grows restless...",
-            user.name,
-            reason,
-            state.warning_timestamps.len()
-        )
-    };
+    let response =
+        get_moderator_response(enforce, state.warning_timestamps.len(), &user.name, &reason);
 
     ctx.say(response).await?;
     Ok(())
@@ -475,6 +606,7 @@ pub async fn daemon_altar(
     ctx: Context<'_, Data, Error>,
     #[description = "Channel to use for enforcement logs"] channel: serenity::Channel,
 ) -> Result<(), Error> {
+    ctx.defer().await?;
     let guild_id = ctx
         .guild_id()
         .ok_or("This command must be used in a guild")?;
@@ -1172,15 +1304,11 @@ fn is_immediate_action(action: &EnforcementAction) -> bool {
         EnforcementAction::Kick { delay } | EnforcementAction::VoiceDisconnect { delay } => {
             delay.is_none() || delay.is_some_and(|d| d == 0)
         }
-        EnforcementAction::Mute { duration }
-        | EnforcementAction::VoiceMute { duration }
-        | EnforcementAction::VoiceDeafen { duration }
-        | EnforcementAction::Ban { duration } => {
-            duration.is_none() || duration.is_some_and(|d| d == 0)
-        }
-        EnforcementAction::VoiceChannelHaunt { interval, .. } => {
-            interval.is_none() || interval.is_some_and(|d| d == 0)
-        }
+        EnforcementAction::Mute { .. }
+        | EnforcementAction::VoiceMute { .. }
+        | EnforcementAction::VoiceDeafen { .. }
+        | EnforcementAction::Ban { .. }
+        | EnforcementAction::VoiceChannelHaunt { .. } => true,
         EnforcementAction::None => false,
     }
 }
