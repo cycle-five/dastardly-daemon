@@ -1,8 +1,5 @@
 use chrono::Utc;
-use dastardly_daemon::{
-    data::{Data, EnforcementAction, EnforcementState, PendingEnforcement},
-    enforcement::EnforcementCheckRequest,
-};
+use dastardly_daemon::data::{Data, EnforcementAction, EnforcementState, PendingEnforcement};
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -12,7 +9,7 @@ async fn main() {
     println!("-------------------------");
 
     // Create a new data instance
-    let mut data = Data::new();
+    let data = Data::new();
 
     // Create a test user and guild
     let user_id = 12345;

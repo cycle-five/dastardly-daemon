@@ -3,36 +3,7 @@ use dashmap::DashMap;
 use std::time::Duration;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum EnforcementState {
-    Pending,
-    Active,
-    Reversed,
-    Completed,
-    Cancelled,
-}
-
-#[derive(Debug, Clone)]
-enum EnforcementAction {
-    VoiceMute { duration: Option<u64> },
-    VoiceDisconnect { delay: Option<u64> },
-}
-
-#[derive(Debug, Clone)]
-struct PendingEnforcement {
-    id: String,
-    warning_id: String,
-    user_id: u64,
-    guild_id: u64,
-    action: EnforcementAction,
-    execute_at: String,
-    reverse_at: Option<String>,
-    state: EnforcementState,
-    created_at: String,
-    executed_at: Option<String>,
-    reversed_at: Option<String>,
-    executed: bool,
-}
+use dastardly_daemon::{EnforcementAction, EnforcementState, PendingEnforcement};
 
 struct TestData {
     pending_enforcements: DashMap<String, PendingEnforcement>,

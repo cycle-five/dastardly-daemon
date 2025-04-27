@@ -180,6 +180,40 @@ pub struct PendingEnforcement {
     pub executed: bool, // Legacy field for backward compatibility
 }
 
+/// Implement Display for `PendingEnforcement`
+impl std::fmt::Display for PendingEnforcement {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Enforcement ID: {}
+        \nWarning ID: {}
+        \nUser ID: {}
+        \nGuild ID: {}
+        \nAction: {:?}
+        \nExecute At: {}
+        \nReverse At: {:?}
+        \nState: {:?}
+        \nCreated At: {}
+        \nExecuted At: {:?}
+        \nReversed At: {:?}
+        \nExecuted: {}
+        ",
+            self.id,
+            self.warning_id,
+            self.user_id,
+            self.guild_id,
+            self.action,
+            self.execute_at,
+            self.reverse_at,
+            self.state,
+            self.created_at,
+            self.executed_at,
+            self.reversed_at,
+            self.executed
+        )
+    }
+}
+
 /// Tracks warning state for a user, used for the weighted warning system
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserWarningState {

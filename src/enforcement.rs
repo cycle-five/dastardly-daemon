@@ -21,6 +21,7 @@ pub enum EnforcementCheckRequest {
 }
 
 /// Create a channel and return the sender
+#[must_use]
 pub fn create_enforcement_channel() -> Sender<EnforcementCheckRequest> {
     let (tx, rx) = mpsc::channel::<EnforcementCheckRequest>(100);
     let tx_clone = tx.clone();
@@ -71,6 +72,7 @@ thread_local! {
 }
 
 /// Get the enforcement receiver if available
+#[must_use]
 pub fn take_enforcement_receiver() -> Option<Receiver<EnforcementCheckRequest>> {
     ENFORCEMENT_RECEIVER.with(|cell| cell.borrow_mut().take())
 }

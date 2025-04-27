@@ -1,5 +1,6 @@
+use crate::Error;
+use crate::data::Data;
 use crate::{COMMAND_TARGET, CONSOLE_TARGET, ERROR_TARGET, EVENT_TARGET};
-use crate::{Data, Error};
 use poise::{Context, FrameworkError};
 use std::path::Path;
 use std::time::Instant;
@@ -19,7 +20,11 @@ pub const COMMAND_LOG_FILE: &str = "commands";
 /// Event log file name
 pub const EVENTS_LOG_FILE: &str = "events";
 /// You might add other log files here...
+pub const _YOUR_OTHER_CONSTS: &str = "ASDF";
+
 /// Initialize the logging system with console and file outputs
+/// # Errors
+/// - Errors if log directory can't be created.
 pub fn init() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Create log directory if it doesn't exist
     if !Path::new(LOG_DIR).exists() {
@@ -62,7 +67,7 @@ pub fn init() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
         EnvFilter::new("info")
             // Filter out serenity logs
-            .add_directive("serenity=error".parse().unwrap())
+            .add_directive("serenity=error".parse().unwrap_or_default())
     });
 
     tracing_subscriber::registry()
