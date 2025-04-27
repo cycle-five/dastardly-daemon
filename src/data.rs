@@ -6,6 +6,7 @@ use std::{
 };
 
 use crate::enforcement::EnforcementCheckRequest;
+use crate::status::BotStatus;
 use dashmap::DashMap;
 use poise::serenity_prelude as serenity;
 use serde::{Deserialize, Serialize};
@@ -256,11 +257,15 @@ impl std::fmt::Debug for Data {
 impl Data {
     /// Get the guild configuration for a specific guild
     #[must_use]
-    pub fn get_guild_config(&self, guild_id: serenity::GuildId) -> Option<GuildConfig> {
+    pub fn get_guild_config(&self, guild_id: serenity::GuildId) -> GuildConfig {
         self.0
             .guild_configs
-            .get(&guild_id)
-            .map(|entry| entry.value().clone())
+            .entry(guild_id)
+            .or_insert_with(|| {
+                let config = GuildConfig::default();
+                config
+            })
+            .clone()
     }
 
     /// Get the cache
@@ -323,7 +328,7 @@ impl Data {
 
     /// Get the pending enforcement actions
     #[must_use]
-    pub fn get_pending_enforcements(&self) -> Vec<PendingEnforcement> {
+    pub fn _get_pending_enforcements(&self) -> Vec<PendingEnforcement> {
         self.0
             .pending_enforcements
             .iter()
@@ -333,7 +338,7 @@ impl Data {
 
     /// Get a specific warning by ID
     #[must_use]
-    pub fn get_warning(&self, id: &str) -> Option<Warning> {
+    pub fn _get_warning(&self, id: &str) -> Option<Warning> {
         self.0.warnings.get(id).map(|entry| entry.value().clone())
     }
 
@@ -438,6 +443,8 @@ pub struct DataInner {
     pub user_warning_states: DashMap<String, UserWarningState>,
     // Channel to send enforcement check requests
     pub enforcement_tx: Arc<Option<Sender<EnforcementCheckRequest>>>,
+    // Status tracking for the bot's state and active voice channels
+    pub status: Arc<BotStatus>,
 }
 
 impl Default for DataInner {
@@ -459,6 +466,7 @@ impl DataInner {
             completed_enforcements: DashMap::new(),
             user_warning_states: DashMap::new(),
             enforcement_tx: Arc::new(None),
+            status: Arc::new(BotStatus::new()),
         }
     }
 

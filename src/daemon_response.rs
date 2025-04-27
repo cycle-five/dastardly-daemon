@@ -1,7 +1,7 @@
 //! LLM integration for generating daemon responses
 //!
 //! This module provides functionality for generating text through an LLM API.
-//! It is behind a feature flag "llm-integration".
+//! It is behind a feature flag "llm".
 
 use crate::data::UserWarningState;
 
@@ -59,7 +59,7 @@ pub enum ResponseType {
 /// # Returns
 ///
 /// A string containing the generated response
-#[cfg(feature = "llm-integration")]
+#[cfg(not(feature = "llm"))]
 pub async fn generate_daemon_response(
     _warning_context: &str,
     user_history: Option<&UserWarningState>,
@@ -106,30 +106,11 @@ pub async fn generate_daemon_response(
 
 #[allow(dead_code)]
 /// Non-feature-flagged version that returns static responses
-#[cfg(not(feature = "llm-integration"))]
+#[cfg(feature = "llm")]
 pub async fn generate_daemon_response(
     _context: &str,
-    user_history: Option<&UserWarningState>,
-    response_type: ResponseType,
+    _user_history: Option<&UserWarningState>,
+    _response_type: ResponseType,
 ) -> String {
-    // Simple static responses when LLM integration is not enabled
-    // Still check for repeat offenders to add some variety
-    let repeat_offender =
-        user_history.map_or_else(|| false, |state| state.warning_timestamps.len() > 2);
-
-    match response_type {
-        ResponseType::Warning => {
-            if repeat_offender {
-                "YOU AGAIN? *sigh* Consider yourself warned, mortal. Again."
-            } else {
-                "Consider yourself warned, mortal."
-            }
-        }
-        ResponseType::Punishment => "Your impudence has consequences. Suffer my wrath!",
-        ResponseType::ChannelHaunt => "Let the channel haunting begin! *evil laughter*",
-        ResponseType::Appeasement => "Fine. I'll stop. For now.",
-        ResponseType::Summoning => "I have been summoned. What is your desire, mortal?",
-        ResponseType::ChaosRitual => "The chaos ritual is complete!",
-    }
-    .to_string()
+    "RAWR IMPLEMENT THIS!".to_string()
 }

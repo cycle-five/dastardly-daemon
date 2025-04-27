@@ -1,6 +1,5 @@
 use crate::Error;
 use crate::data::Data;
-use crate::{COMMAND_TARGET, CONSOLE_TARGET, ERROR_TARGET, EVENT_TARGET};
 use poise::{Context, FrameworkError};
 use std::path::Path;
 use std::time::Instant;
@@ -21,6 +20,13 @@ pub const COMMAND_LOG_FILE: &str = "commands";
 pub const EVENTS_LOG_FILE: &str = "events";
 /// You might add other log files here...
 pub const _YOUR_OTHER_CONSTS: &str = "ASDF";
+
+// Customize these constants for your bot
+pub const BOT_NAME: &str = "dastardly_daemon";
+pub const COMMAND_TARGET: &str = "dastardly_daemon::command";
+pub const ERROR_TARGET: &str = "dastardly_daemon::error";
+pub const EVENT_TARGET: &str = "dastardly_daemon::handlers";
+pub const CONSOLE_TARGET: &str = "dastardly_daemon";
 
 /// Initialize the logging system with console and file outputs
 /// # Errors

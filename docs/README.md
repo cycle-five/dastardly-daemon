@@ -55,4 +55,4 @@ The daemon is:
 
 ## LLM Integration
 
-Optionally, the daemon can be connected to an LLM to generate more creative and dynamic responses to situations. This is controlled by the `llm-integration` feature flag.
+Optionally, the daemon can be connected to an LLM to generate more creative and dynamic responses to situations. This is controlled by the `llm` feature flag.

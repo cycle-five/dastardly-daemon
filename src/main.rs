@@ -1,11 +1,14 @@
 mod commands;
+mod daemon_response;
 mod data;
 mod enforcement;
 mod handlers;
-mod llm;
 mod logging;
+mod status;
 
+use crate::data::Data;
 use std::env;
+type Error = Box<dyn std::error::Error + Send + Sync>;
 
 use poise::serenity_prelude::{self as serenity};
 use serenity::GatewayIntents;
@@ -17,9 +20,6 @@ pub const COMMAND_TARGET: &str = "dastardly_daemon::command";
 pub const ERROR_TARGET: &str = "dastardly_daemon::error";
 pub const EVENT_TARGET: &str = "dastardly_daemon::handlers";
 pub const CONSOLE_TARGET: &str = "dastardly_daemon";
-pub use data::{Data, DataInner};
-pub type Error = Box<dyn std::error::Error + Send + Sync>;
-pub type Context<'a> = poise::Context<'a, Data, Error>;
 
 /// Main function to run the bot
 async fn async_main() -> Result<(), Error> {
@@ -39,6 +39,10 @@ async fn async_main() -> Result<(), Error> {
 
     // Set the enforcement sender in data BEFORE wrapping in Arc
     data.set_enforcement_tx(enforcement_tx);
+
+    // Initialize the status tracker with the current data
+    info!("Initializing status tracker...");
+    data.status.initialize_from_cache(&data);
 
     // Now wrap the data in Arc for thread-safe sharing
     // let data = Arc::new(data);
@@ -68,6 +72,8 @@ async fn async_main() -> Result<(), Error> {
                 commands::summon_daemon(),
                 commands::daemon_altar(),
                 commands::chaos_ritual(),
+                commands::judgment_history(),
+                commands::daemon_status(),
             ],
             pre_command: |ctx| {
                 Box::pin(async move {

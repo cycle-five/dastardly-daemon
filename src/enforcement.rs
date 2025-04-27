@@ -47,25 +47,6 @@ pub fn start_task_with_receiver(
     });
 }
 
-/// Start the enforcement task and return a sender to communicate with it
-/// This is kept for backward compatibility
-pub fn _start_enforcement_task(
-    http: Arc<Http>,
-    data: Data,
-    check_interval_seconds: u64,
-) -> Sender<EnforcementCheckRequest> {
-    // Create a channel for communication with the task
-    let (tx, rx) = mpsc::channel::<EnforcementCheckRequest>(100);
-    let tx_clone = tx.clone();
-
-    // Spawn the task
-    tokio::spawn(async move {
-        enforcement_task(http, data, rx, check_interval_seconds).await;
-    });
-
-    tx_clone
-}
-
 // Thread-local storage for the enforcement receiver
 thread_local! {
     static ENFORCEMENT_RECEIVER: std::cell::RefCell<Option<Receiver<EnforcementCheckRequest>>> = const { std::cell::RefCell::new(None) };
