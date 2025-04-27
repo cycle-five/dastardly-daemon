@@ -51,6 +51,17 @@ impl Default for GuildConfig {
     }
 }
 
+impl GuildConfig {
+    /// Create a new `GuildConfig` with the specified guild ID
+    #[must_use]
+    pub fn new(guild_id: u64) -> Self {
+        Self {
+            guild_id,
+            ..Default::default()
+        }
+    }
+}
+
 /// Notification method for warnings
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub enum NotificationMethod {
@@ -261,10 +272,7 @@ impl Data {
         self.0
             .guild_configs
             .entry(guild_id)
-            .or_insert_with(|| {
-                let config = GuildConfig::default();
-                config
-            })
+            .or_insert_with(|| GuildConfig::new(guild_id.get()))
             .clone()
     }
 

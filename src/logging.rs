@@ -22,7 +22,7 @@ pub const EVENTS_LOG_FILE: &str = "events";
 pub const _YOUR_OTHER_CONSTS: &str = "ASDF";
 
 // Customize these constants for your bot
-pub const BOT_NAME: &str = "dastardly_daemon";
+pub const _BOT_NAME: &str = "dastardly_daemon";
 pub const COMMAND_TARGET: &str = "dastardly_daemon::command";
 pub const ERROR_TARGET: &str = "dastardly_daemon::error";
 pub const EVENT_TARGET: &str = "dastardly_daemon::handlers";

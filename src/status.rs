@@ -9,6 +9,7 @@ use tracing::info;
 
 /// Structure to track voice channel activity
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct VoiceChannelStatus {
     /// Channel ID
     pub channel_id: ChannelId,
@@ -28,6 +29,7 @@ pub struct VoiceChannelStatus {
 
 /// Structure to track a user's voice activity
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct UserVoiceStatus {
     /// User ID
     pub user_id: UserId,
@@ -50,9 +52,9 @@ pub struct UserVoiceStatus {
 /// Main status tracking struct
 #[derive(Debug, Clone)]
 pub struct BotStatus {
-    /// Map of active voice channels (channel_id -> VoiceChannelStatus)
+    /// Map of active voice channels (`channel_id` -> `VoiceChannelStatus`)
     pub active_voice_channels: DashMap<ChannelId, VoiceChannelStatus>,
-    /// Map of users in voice channels (user_id -> UserVoiceStatus)
+    /// Map of users in voice channels (`user_id` -> `UserVoiceStatus`)
     pub users_in_voice: DashMap<UserId, UserVoiceStatus>,
     /// Last time a status check was performed
     pub last_status_check: SystemTime,
@@ -66,6 +68,7 @@ impl Default for BotStatus {
 
 impl BotStatus {
     /// Create a new empty status tracker
+    #[must_use]
     pub fn new() -> Self {
         Self {
             active_voice_channels: DashMap::new(),
@@ -152,12 +155,14 @@ impl BotStatus {
         let now = SystemTime::now();
 
         // Get channel name from cache if available
-        let channel_name = data
+        let channel = data
             .cache
-            .channel(channel_id)
-            .map(|ch| ch.name.clone())
-            .unwrap_or_else(|| format!("Channel {}", channel_id));
+            .guild(guild_id)
+            .and_then(|g| g.channels.get(&channel_id).cloned());
 
+        let channel_name = channel
+            .map(|c| c.name.clone())
+            .unwrap_or_else(|| format!("Channel {channel_id}"));
         // Update voice channel status
         let mut channel_status = self
             .active_voice_channels
@@ -275,6 +280,7 @@ impl BotStatus {
     }
 
     /// Get a list of active voice channels that have users with warnings or enforcements
+    #[must_use]
     pub fn _get_channels_with_issues(&self) -> Vec<VoiceChannelStatus> {
         self.active_voice_channels
             .iter()
@@ -286,6 +292,7 @@ impl BotStatus {
     }
 
     /// Get a list of users with active warnings or enforcements who are in voice channels
+    #[must_use]
     pub fn get_problematic_users(&self) -> Vec<UserVoiceStatus> {
         self.users_in_voice
             .iter()
@@ -295,6 +302,7 @@ impl BotStatus {
     }
 
     /// Get counts of active voice channels and users
+    #[must_use]
     pub fn get_active_counts(&self) -> (usize, usize, usize, usize) {
         let active_channels = self.active_voice_channels.len();
         let active_users = self.users_in_voice.len();
@@ -347,6 +355,7 @@ impl BotStatus {
 }
 
 /// Create a pretty-formatted representation of the active voice channels
+#[must_use]
 pub fn format_active_channels(bot_status: &BotStatus, data: &Data) -> String {
     if bot_status.active_voice_channels.is_empty() {
         return "No active voice channels".to_string();
@@ -385,7 +394,7 @@ pub fn format_active_channels(bot_status: &BotStatus, data: &Data) -> String {
                 .map(|g| g.name.clone())
                 .unwrap_or_else(|| format!("Guild {}", channel.guild_id));
 
-            result.push_str(&format!("\n### {}\n", guild_name));
+            result.push_str(&format!("\n### {guild_name}\n"));
         }
 
         // Build status indicators
@@ -399,8 +408,7 @@ pub fn format_active_channels(bot_status: &BotStatus, data: &Data) -> String {
 
         // Add channel info
         result.push_str(&format!(
-            "- {} **{}**: {} users",
-            status_indicator,
+            "- {status_indicator} **{}**: {} users",
             channel.name,
             channel.users.len()
         ));
@@ -420,6 +428,8 @@ pub fn format_active_channels(bot_status: &BotStatus, data: &Data) -> String {
 }
 
 /// Create a pretty-formatted representation of users with warnings or enforcements
+#[allow(deprecated)]
+#[must_use]
 pub fn format_problematic_users(bot_status: &BotStatus, data: &Data) -> String {
     let problematic_users = bot_status.get_problematic_users();
 
@@ -452,9 +462,9 @@ pub fn format_problematic_users(bot_status: &BotStatus, data: &Data) -> String {
                 .cache
                 .channel(channel_id)
                 .map(|ch| ch.name.clone())
-                .unwrap_or_else(|| format!("Channel {}", channel_id));
+                .unwrap_or_else(|| format!("Channel {channel_id}"));
 
-            format!(" - in **{}**", channel_name)
+            format!(" - in **{channel_name}**")
         } else {
             String::new()
         };
@@ -481,6 +491,7 @@ pub fn format_problematic_users(bot_status: &BotStatus, data: &Data) -> String {
 }
 
 /// Create a pretty-formatted representation of the pending and active enforcements
+#[must_use]
 pub fn format_enforcement_status(data: &Data) -> String {
     // Get pending and active enforcements
     let pending: Vec<_> = data
@@ -512,15 +523,13 @@ pub fn format_enforcement_status(data: &Data) -> String {
                 .cache
                 .user(UserId::new(user_id))
                 .map(|u| u.name.clone())
-                .unwrap_or_else(|| format!("User {}", user_id));
+                .unwrap_or_else(|| format!("User {user_id}"));
 
             // Format the action in a more readable way
             let action_str = format_enforcement_action(&enforcement.action);
 
             result.push_str(&format!(
-                "- **{}**: {} - Scheduled at {}\n",
-                user_name,
-                action_str,
+                "- **{user_name}**: {action_str} - Scheduled at {}\n",
                 enforcement
                     .execute_at
                     .split('T')
@@ -542,7 +551,7 @@ pub fn format_enforcement_status(data: &Data) -> String {
                 .cache
                 .user(UserId::new(user_id))
                 .map(|u| u.name.clone())
-                .unwrap_or_else(|| format!("User {}", user_id));
+                .unwrap_or_else(|| format!("User {user_id}"));
 
             // Format the action in a more readable way
             let action_str = format_enforcement_action(&enforcement.action);
@@ -557,10 +566,7 @@ pub fn format_enforcement_status(data: &Data) -> String {
                 String::new()
             };
 
-            result.push_str(&format!(
-                "- **{}**: {}{}\n",
-                user_name, action_str, reversal_info
-            ));
+            result.push_str(&format!("- **{user_name}**: {action_str}{reversal_info}\n",));
         }
     }
 
@@ -579,7 +585,7 @@ fn format_enforcement_action(action: &EnforcementAction) -> String {
         EnforcementAction::Kick { delay } => {
             if let Some(d) = delay {
                 if *d > 0 {
-                    format!("Will be kicked in {} seconds", d)
+                    format!("Will be kicked in {d} seconds")
                 } else {
                     "Kicked".to_string()
                 }
@@ -596,7 +602,7 @@ fn format_enforcement_action(action: &EnforcementAction) -> String {
         EnforcementAction::VoiceDisconnect { delay } => {
             if let Some(d) = delay {
                 if *d > 0 {
-                    format!("Will be disconnected from voice in {} seconds", d)
+                    format!("Will be disconnected from voice in {d} seconds")
                 } else {
                     "Disconnected from voice".to_string()
                 }
@@ -626,6 +632,7 @@ fn format_enforcement_action(action: &EnforcementAction) -> String {
 }
 
 /// Format a complete status report of the bot
+#[must_use]
 pub fn format_complete_status(bot_status: &BotStatus, data: &Data) -> String {
     let (total_channels, total_users, issue_channels, issue_users) = bot_status.get_active_counts();
 
@@ -635,13 +642,11 @@ pub fn format_complete_status(bot_status: &BotStatus, data: &Data) -> String {
     result.push_str("# Dastardly Daemon Status Report\n\n");
 
     result.push_str(&format!(
-        "**Active Voice Channels**: {} (with {} having warned/enforced users)\n",
-        total_channels, issue_channels
+        "**Active Voice Channels**: {total_channels} (with {issue_channels} having warned/enforced users)\n",
     ));
 
     result.push_str(&format!(
-        "**Users in Voice**: {} (with {} having warnings/enforcements)\n",
-        total_users, issue_users
+        "**Users in Voice**: {total_users} (with {issue_users} having warnings/enforcements)\n",
     ));
 
     // Add pending/active enforcement counts
@@ -649,8 +654,7 @@ pub fn format_complete_status(bot_status: &BotStatus, data: &Data) -> String {
     let active_count = data.active_enforcements.len();
 
     result.push_str(&format!(
-        "**Enforcements**: {} pending, {} active\n",
-        pending_count, active_count
+        "**Enforcements**: {pending_count} pending, {active_count} active\n",
     ));
 
     result.push_str(&format!(
@@ -661,12 +665,12 @@ pub fn format_complete_status(bot_status: &BotStatus, data: &Data) -> String {
     // Add detailed sections
     if issue_channels > 0 {
         result.push_str(&format_active_channels(bot_status, data));
-        result.push_str("\n");
+        result.push('\n');
     }
 
     if issue_users > 0 {
         result.push_str(&format_problematic_users(bot_status, data));
-        result.push_str("\n");
+        result.push('\n');
     }
 
     if pending_count > 0 || active_count > 0 {
@@ -676,7 +680,7 @@ pub fn format_complete_status(bot_status: &BotStatus, data: &Data) -> String {
     result
 }
 
-/// Helper to format a SystemTime in a human-readable format
+/// Helper to format a `SystemTime` in a human-readable format
 fn format_system_time(time: SystemTime) -> String {
     let now = SystemTime::now();
 
@@ -696,7 +700,7 @@ fn format_system_time(time: SystemTime) -> String {
 }
 
 /// Create an embed for displaying bot status
-pub fn create_status_embed(bot_status: &BotStatus, data: &Data) -> CreateEmbed {
+pub fn _create_status_embed(bot_status: &BotStatus, data: &Data) -> CreateEmbed {
     let (total_channels, total_users, issue_channels, issue_users) = bot_status.get_active_counts();
     let pending_count = data.pending_enforcements.len();
     let active_count = data.active_enforcements.len();
@@ -704,11 +708,11 @@ pub fn create_status_embed(bot_status: &BotStatus, data: &Data) -> CreateEmbed {
     let mut embed = CreateEmbed::new()
         .title("Daemon Status")
         .description("Current state of the Dastardly Daemon")
-        .field("Voice Channels", format!("{} active", total_channels), true)
-        .field("Users in Voice", format!("{} active", total_users), true)
+        .field("Voice Channels", format!("{total_channels} active"), true)
+        .field("Users in Voice", format!("{total_users} active"), true)
         .field(
             "Enforcements",
-            format!("{} pending, {} active", pending_count, active_count),
+            format!("{pending_count} pending, {active_count} active"),
             true,
         )
         .timestamp(serenity::Timestamp::now());
@@ -717,7 +721,7 @@ pub fn create_status_embed(bot_status: &BotStatus, data: &Data) -> CreateEmbed {
     if issue_channels > 0 {
         embed = embed.field(
             "Problematic Channels",
-            format!("{} channels with warned/enforced users", issue_channels),
+            format!("{issue_channels} channels with warned/enforced users"),
             false,
         );
     }

@@ -9,6 +9,7 @@ use tokio::time::Duration;
 use tracing::{error, info, warn};
 
 /// Type of enforcement check request
+#[allow(dead_code)]
 pub enum EnforcementCheckRequest {
     /// Check for all pending enforcements regardless of timing
     CheckAll,

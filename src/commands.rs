@@ -1191,8 +1191,7 @@ pub async fn daemon_status(
                     .to_string()
             } else {
                 format!(
-                    "{}\n\n{}\n\n{}\n\n*Use `/daemon_status true` for complete details.*",
-                    channels_text, users_text, enforcements_text
+                    "{channels_text}\n\n{users_text}\n\n{enforcements_text}\n\n*Use `/daemon_status true` for complete details.*",
                 )
             }
         );
