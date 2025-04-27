@@ -810,7 +810,7 @@ async fn reverse_enforcement(http: &Http, data: &Data, enforcement_id: &str) -> 
 /// Clear the pending enforcement from a user's warning state after it has been executed
 fn clear_pending_enforcement(data: &Data, user_id: u64, guild_id: u64) {
     let key = format!("{user_id}:{guild_id}");
-    
+
     if let Some(mut state) = data.user_warning_states.get_mut(&key) {
         // Clear the pending enforcement
         if state.pending_enforcement.is_some() {
@@ -818,7 +818,7 @@ fn clear_pending_enforcement(data: &Data, user_id: u64, guild_id: u64) {
             let mut updated_state = state.value().clone();
             updated_state.pending_enforcement = None;
             updated_state.last_updated = Utc::now().to_rfc3339();
-            
+
             // Update the state
             *state = updated_state;
         }
@@ -919,7 +919,7 @@ async fn execute_enforcement(http: &Http, data: &Data, enforcement_id: &str) -> 
                 .insert(id.clone(), enforcement_data);
         }
 
-        // Clear the pending enforcement from the user's warning state so future warnings 
+        // Clear the pending enforcement from the user's warning state so future warnings
         // can set new appropriate enforcements based on the infraction type
         clear_pending_enforcement(data, user_id, guild_id);
 

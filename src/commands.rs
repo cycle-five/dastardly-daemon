@@ -40,7 +40,8 @@ fn get_notification_method(
     }
 }
 
-// Helper function to determine the appropriate enforcement action
+/// Helper function to determine the appropriate enforcement action
+#[allow(clippy::unnested_or_patterns)]
 fn get_enforcement_action(
     state: &UserWarningState,
     infraction_type: &str,
@@ -52,36 +53,37 @@ fn get_enforcement_action(
     // Check if there's a pending enforcement that is still relevant
     let pending_is_relevant = if let Some(existing_enforcement) = &state.pending_enforcement {
         // Check if the pending enforcement is relevant to the current infraction type
-        let is_matching_type = match (infraction_type, existing_enforcement) {
-            ("voice", EnforcementAction::VoiceMute { .. }) |
-            ("voice", EnforcementAction::VoiceDeafen { .. }) |
-            ("voice", EnforcementAction::VoiceDisconnect { .. }) |
-            ("voice", EnforcementAction::VoiceChannelHaunt { .. }) |
-            ("text", EnforcementAction::Mute { .. }) |
-            ("server", EnforcementAction::Ban { .. }) |
-            ("server", EnforcementAction::Kick { .. }) => true,
-            _ => false,
-        };
-        
+        let is_matching_type = matches!(
+            (infraction_type, existing_enforcement),
+            ("voice", EnforcementAction::VoiceMute { .. })
+                | ("voice", EnforcementAction::VoiceDeafen { .. })
+                | ("voice", EnforcementAction::VoiceDisconnect { .. })
+                | ("voice", EnforcementAction::VoiceChannelHaunt { .. })
+                | ("text", EnforcementAction::Mute { .. })
+                | ("server", EnforcementAction::Ban { .. })
+                | ("server", EnforcementAction::Kick { .. })
+        );
+
         // Check if the pending enforcement is recent enough (within 14 days)
-        let is_recent = if let Ok(last_updated) = chrono::DateTime::parse_from_rfc3339(&state.last_updated) {
-            // Convert to timestamp (seconds since epoch) to avoid timezone issues
-            let last_updated_timestamp = last_updated.timestamp();
-            let now_timestamp = chrono::Utc::now().timestamp();
-            
-            // Calculate difference in days (86400 seconds per day)
-            let days_diff = (now_timestamp - last_updated_timestamp) / 86400;
-            days_diff < 7
-        } else {
-            false
-        };
-        
+        let is_recent =
+            if let Ok(last_updated) = chrono::DateTime::parse_from_rfc3339(&state.last_updated) {
+                // Convert to timestamp (seconds since epoch) to avoid timezone issues
+                let last_updated_timestamp = last_updated.timestamp();
+                let now_timestamp = chrono::Utc::now().timestamp();
+
+                // Calculate difference in days (86400 seconds per day)
+                let days_diff = (now_timestamp - last_updated_timestamp) / 86400;
+                days_diff < 7
+            } else {
+                false
+            };
+
         // Only consider it relevant if both type matches and it's recent
         is_matching_type && is_recent
     } else {
         false
     };
-    
+
     if pending_is_relevant {
         warn!(
             "Using existing pending enforcement for user: {user_id}, guild: {guild_id}, state: {state:?}"
@@ -121,7 +123,7 @@ fn get_enforcement_action(
     } else {
         // For repeat offenders, we need to set an appropriate escalated enforcement action
         warn!("Repeated warning for user: {user_id}, guild: {guild_id}, state: {state:?}");
-        
+
         // Select an escalated enforcement based on the current infraction type
         let enforcement = match infraction_type {
             "voice" => {
@@ -167,7 +169,7 @@ fn get_enforcement_action(
         let key = format!("{user_id}:{guild_id}");
         let mut updated_state = state.clone();
         updated_state.pending_enforcement = Some(enforcement.clone());
-        updated_state.last_updated = chrono::Utc::now().to_rfc3339(); 
+        updated_state.last_updated = chrono::Utc::now().to_rfc3339();
         ctx_data.user_warning_states.insert(key, updated_state);
 
         Some(enforcement)
