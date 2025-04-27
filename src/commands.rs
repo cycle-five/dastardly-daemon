@@ -1410,17 +1410,6 @@ async fn log_daemon_warning(
     }
 }
 
-// /// Retrieves the guild configuration or creates a default one
-// fn get_guild_config(ctx: &Context<'_, Data, Error>, guild_id: serenity::GuildId) -> GuildConfig {
-//     ctx.data().guild_configs.get(&guild_id).map_or_else(
-//         || GuildConfig {
-//             guild_id: guild_id.get(),
-//             ..Default::default()
-//         },
-//         |entry| entry.clone(),
-//     )
-// }
-
 /// Calculates the execution time for an enforcement action
 fn calculate_execute_at(action: &EnforcementAction) -> chrono::DateTime<Utc> {
     match action {
