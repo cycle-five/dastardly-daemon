@@ -49,11 +49,44 @@ fn get_enforcement_action(
     guild_id: u64,
     ctx_data: &Data,
 ) -> Option<EnforcementAction> {
-    if state.pending_enforcement.is_some() {
+    // Check if there's a pending enforcement that is still relevant
+    let pending_is_relevant = if let Some(existing_enforcement) = &state.pending_enforcement {
+        // Check if the pending enforcement is relevant to the current infraction type
+        let is_matching_type = match (infraction_type, existing_enforcement) {
+            ("voice", EnforcementAction::VoiceMute { .. }) |
+            ("voice", EnforcementAction::VoiceDeafen { .. }) |
+            ("voice", EnforcementAction::VoiceDisconnect { .. }) |
+            ("voice", EnforcementAction::VoiceChannelHaunt { .. }) |
+            ("text", EnforcementAction::Mute { .. }) |
+            ("server", EnforcementAction::Ban { .. }) |
+            ("server", EnforcementAction::Kick { .. }) => true,
+            _ => false,
+        };
+        
+        // Check if the pending enforcement is recent enough (within 14 days)
+        let is_recent = if let Ok(last_updated) = chrono::DateTime::parse_from_rfc3339(&state.last_updated) {
+            // Convert to timestamp (seconds since epoch) to avoid timezone issues
+            let last_updated_timestamp = last_updated.timestamp();
+            let now_timestamp = chrono::Utc::now().timestamp();
+            
+            // Calculate difference in days (86400 seconds per day)
+            let days_diff = (now_timestamp - last_updated_timestamp) / 86400;
+            days_diff < 7
+        } else {
+            false
+        };
+        
+        // Only consider it relevant if both type matches and it's recent
+        is_matching_type && is_recent
+    } else {
+        false
+    };
+    
+    if pending_is_relevant {
         warn!(
-            "Enforcement action requested for user: {user_id}, guild: {guild_id}, state: {state:?}"
+            "Using existing pending enforcement for user: {user_id}, guild: {guild_id}, state: {state:?}"
         );
-        // Use the pending enforcement that was set on first warning
+        // Use the pending enforcement that was set previously
         state.pending_enforcement.clone()
     } else if state.warning_timestamps.len() == 1 {
         // This is the first warning, set a pending enforcement based on infraction type
@@ -81,19 +114,20 @@ fn get_enforcement_action(
         let key = format!("{user_id}:{guild_id}");
         let mut updated_state = state.clone();
         updated_state.pending_enforcement = Some(enforcement.clone());
+        updated_state.last_updated = chrono::Utc::now().to_rfc3339();
         ctx_data.user_warning_states.insert(key, updated_state);
 
         Some(enforcement)
     } else {
-        // For repeat offenders without a pending enforcement, we need to set an appropriate
-        // enforcement action. This fixes the issue where repeat offenders would face no
-        // consequences if they didn't have a pending enforcement from their first warning.
+        // For repeat offenders, we need to set an appropriate escalated enforcement action
         warn!("Repeated warning for user: {user_id}, guild: {guild_id}, state: {state:?}");
+        
+        // Select an escalated enforcement based on the current infraction type
         let enforcement = match infraction_type {
             "voice" => {
                 // For voice infractions, randomly select between different voice-related actions
                 let mut rng = rand::thread_rng();
-                let action_choice = rand::Rng::gen_range(&mut rng, 0..4); // 0-3 for four possible actions
+                let action_choice = rand::Rng::gen_range(&mut rng, 0..3); // 0-3 for four possible actions
 
                 match action_choice {
                     0 => EnforcementAction::VoiceChannelHaunt {
@@ -117,8 +151,8 @@ fn get_enforcement_action(
                 guild_config
                     .default_enforcement
                     .clone()
-                    .unwrap_or(EnforcementAction::Ban {
-                        duration: Some(3600), // Escalate to ban for repeat server infractions
+                    .unwrap_or(EnforcementAction::Mute {
+                        duration: Some(3600),
                     })
             }
             _ => guild_config // text
@@ -129,10 +163,11 @@ fn get_enforcement_action(
                 }),
         };
 
-        // Store the enforcement in the user state so it's available for future warnings
+        // Store the new enforcement in the user state
         let key = format!("{user_id}:{guild_id}");
         let mut updated_state = state.clone();
         updated_state.pending_enforcement = Some(enforcement.clone());
+        updated_state.last_updated = chrono::Utc::now().to_rfc3339(); 
         ctx_data.user_warning_states.insert(key, updated_state);
 
         Some(enforcement)
