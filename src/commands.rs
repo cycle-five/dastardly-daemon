@@ -1259,150 +1259,84 @@ async fn log_daemon_warning(
         .data()
         .calculate_warning_score(user.id.get(), state.guild_id);
 
-    // Focus on voice chat cases with a more natural, demonic tone
-    if infraction_type == "voice" {
-        // For voice infractions, use a more natural message format
-        let status_emoji = if enforce { "🔥" } else { "👁️" };
-        let (header, _color_hex) = if enforce {
-            ("**DAEMON ENFORCEMENT ACTIVATED**", "#FF0000")
-        } else if state.warning_timestamps.len() == 1 {
-            ("**DAEMON SUMMONED**", "#FFA500")
-        } else {
-            ("**DAEMON WARNING**", "#FFCC00")
-        };
+    // For non-voice infractions, use a hybrid approach with an embed for the log
+    let (title_prefix, emoji) = match infraction_type {
+        "text" => ("Text Channel", "💬"),
+        "server" => ("Server Rule", "⚠️"),
+        _ => ("General", "⚠️"),
+    };
 
-        // Create action description if applicable
-        let action_text = if let Some(action) = enforcement_action {
-            match action {
+    let title = if enforce {
+        format!("🚫 {title_prefix} Enforcement")
+    } else {
+        format!("{emoji} {title_prefix} Warning")
+    };
+
+    let mut embed = serenity::CreateEmbed::new()
+        .title(title)
+        .description(format!(
+            "{demonic_message}\n\n{user_mention} has received a {infraction_type} warning",
+        ))
+        .field("Reason", reason, false)
+        .field("Issued By", mod_mention.to_string(), true)
+        .field("Total Warnings", warning_count.to_string(), true)
+        .field("Warning Score", format!("{warning_score:.2}"), true)
+        .colour(serenity::Colour::GOLD)
+        .timestamp(serenity::Timestamp::now());
+
+    // If this might lead to enforcement, indicate that
+    if let Some(action) = enforcement_action {
+        if state.warning_timestamps.len() == 1 {
+            // This is the first warning, indicate what will happen
+            let action_desc = match action {
                 EnforcementAction::VoiceMute { duration } => {
-                    format!(
-                        "Voice shall be silenced for {} seconds",
-                        duration.unwrap_or(300)
-                    )
+                    format!("Voice mute for {} seconds", duration.unwrap_or(300))
                 }
                 EnforcementAction::VoiceDeafen { duration } => {
+                    format!("Voice deafen for {} seconds", duration.unwrap_or(300))
+                }
+                EnforcementAction::VoiceDisconnect { .. } => "Voice disconnect".to_string(),
+                EnforcementAction::Mute { duration } => {
+                    format!("Server mute for {} seconds", duration.unwrap_or(300))
+                }
+                EnforcementAction::Ban { duration } => {
+                    format!("Ban for {} seconds", duration.unwrap_or(86400))
+                }
+                EnforcementAction::Kick { .. } => "Kick".to_string(),
+                EnforcementAction::None => "No action".to_string(),
+                EnforcementAction::VoiceChannelHaunt {
+                    teleport_count,
+                    interval,
+                    return_to_origin,
+                    ..
+                } => {
                     format!(
-                        "Ears shall be cursed for {} seconds",
-                        duration.unwrap_or(300)
+                        "Voice channel haunting: {} teleports over {} seconds{}",
+                        teleport_count.unwrap_or(3),
+                        interval.unwrap_or(10),
+                        if return_to_origin.unwrap_or(true) {
+                            " (with return)"
+                        } else {
+                            " (no return)"
+                        }
                     )
                 }
-                EnforcementAction::VoiceDisconnect { .. } => {
-                    "Mortal shall be banished from the voice realm".to_string()
-                }
-                EnforcementAction::VoiceChannelHaunt { .. } => {
-                    "Mortal shall be haunted through the voice channels".to_string()
-                }
-                _ => format!("Punishment: {action:?}"),
-            }
-        } else {
-            "No immediate action... for now".to_string()
-        };
+            };
 
-        // Create content message in a demonic style
-        let content = format!(
-            "{} {}\n\n{}\n\n{} has disturbed the voice channels.\nReason: {}\nSummoned by: {}\nWarning count: {} (Score: {:.2}/{:.1})\n\n{}",
-            status_emoji,
-            header,
-            demonic_message,
-            user_mention,
-            reason,
-            mod_mention,
-            warning_count,
-            warning_score,
-            WARNING_THRESHOLD,
-            if enforce {
-                format!("**JUDGMENT**: {action_text}")
-            } else if state.warning_timestamps.len() == 1 {
-                format!("**WARNING**: Further transgressions will result in: {action_text}",)
-            } else {
+            embed = embed.field(
+                "🚨 If behavior continues:",
                 format!(
-                    "**WARNING**: The daemon grows restless. Score approaches threshold of {WARNING_THRESHOLD:.1}",
-                )
-            }
-        );
-
-        let message = serenity::CreateMessage::new().content(content);
-        let _ = channel_id.send_message(&ctx.http(), message).await;
-    } else {
-        // For non-voice infractions, use a hybrid approach with an embed for the log
-        let (title_prefix, emoji) = match infraction_type {
-            "text" => ("Text Channel", "💬"),
-            "server" => ("Server Rule", "⚠️"),
-            _ => ("General", "⚠️"),
-        };
-
-        let title = if enforce {
-            format!("🚫 {title_prefix} Enforcement")
-        } else {
-            format!("{emoji} {title_prefix} Warning")
-        };
-
-        let mut embed = serenity::CreateEmbed::new()
-            .title(title)
-            .description(format!(
-                "{demonic_message}\n\n{user_mention} has received a {infraction_type} warning",
-            ))
-            .field("Reason", reason, false)
-            .field("Issued By", mod_mention.to_string(), true)
-            .field("Total Warnings", warning_count.to_string(), true)
-            .field("Warning Score", format!("{warning_score:.2}"), true)
-            .colour(serenity::Colour::GOLD)
-            .timestamp(serenity::Timestamp::now());
-
-        // If this might lead to enforcement, indicate that
-        if let Some(action) = enforcement_action {
-            if state.warning_timestamps.len() == 1 {
-                // This is the first warning, indicate what will happen
-                let action_desc = match action {
-                    EnforcementAction::VoiceMute { duration } => {
-                        format!("Voice mute for {} seconds", duration.unwrap_or(300))
-                    }
-                    EnforcementAction::VoiceDeafen { duration } => {
-                        format!("Voice deafen for {} seconds", duration.unwrap_or(300))
-                    }
-                    EnforcementAction::VoiceDisconnect { .. } => "Voice disconnect".to_string(),
-                    EnforcementAction::Mute { duration } => {
-                        format!("Server mute for {} seconds", duration.unwrap_or(300))
-                    }
-                    EnforcementAction::Ban { duration } => {
-                        format!("Ban for {} seconds", duration.unwrap_or(86400))
-                    }
-                    EnforcementAction::Kick { .. } => "Kick".to_string(),
-                    EnforcementAction::None => "No action".to_string(),
-                    EnforcementAction::VoiceChannelHaunt {
-                        teleport_count,
-                        interval,
-                        return_to_origin,
-                        ..
-                    } => {
-                        format!(
-                            "Voice channel haunting: {} teleports over {} seconds{}",
-                            teleport_count.unwrap_or(3),
-                            interval.unwrap_or(10),
-                            if return_to_origin.unwrap_or(true) {
-                                " (with return)"
-                            } else {
-                                " (no return)"
-                            }
-                        )
-                    }
-                };
-
-                embed = embed.field(
-                    "🚨 If behavior continues:",
-                    format!(
-                        "After reaching a warning score of {WARNING_THRESHOLD:.1}, the user will receive: **{action_desc}**",
-                    ),
-                    false,
-                );
-            } else if enforce {
-                // Enforcement is happening now
-                embed = embed.colour(serenity::Colour::RED).field(
-                    "⚠️ Threshold Reached",
-                    "The daemon has been summoned. Enforcement action is being applied.",
-                    false,
-                );
-            }
+                    "After reaching a warning score of {WARNING_THRESHOLD:.1}, the user will receive: **{action_desc}**",
+                ),
+                false,
+            );
+        } else if enforce {
+            // Enforcement is happening now
+            embed = embed.colour(serenity::Colour::RED).field(
+                "⚠️ Threshold Reached",
+                "The daemon has been summoned. Enforcement action is being applied.",
+                false,
+            );
         }
 
         let message = serenity::CreateMessage::new().embed(embed);
