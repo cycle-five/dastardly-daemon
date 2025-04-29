@@ -344,7 +344,7 @@ async fn handle_mute_action(
 }
 
 /// Handle ban enforcement action
-async fn handle_ban_action(
+async fn _handle_ban_action(
     http: &Http,
     guild_id: GuildId,
     user_id: UserId,
@@ -374,7 +374,7 @@ async fn handle_ban_action(
 }
 
 /// Handle kick enforcement action
-async fn handle_kick_action(
+async fn _handle_kick_action(
     http: &Http,
     guild_id: GuildId,
     user_id: UserId,
@@ -521,20 +521,31 @@ async fn handle_voice_disconnect_action(
 
 /// Get the current voice channel for a user
 async fn get_user_voice_channel(
-    cache_http: &impl CacheHttp,
+    http: &Http,
     guild_id: GuildId,
     user_id: UserId,
 ) -> Option<ChannelId> {
-    let guild = cache_http.cache().and_then(|g| g.guild(guild_id));
-    if let Some(guild) = guild {
-        guild
-            .voice_states
-            .get(&user_id)
-            .and_then(|voice_state| voice_state.channel_id)
-    } else {
-        error!("Guild {guild_id} not found in cache");
-        None
+    // Fallback to HTTP if the guild is not in cache
+    if let Ok(guild) = guild_id.to_partial_guild(http).await {
+        // Get member to find the voice channel
+        let voice_channels = get_guild_voice_channels(http.http(), &guild).await.ok()?;
+        for channel_id in voice_channels {
+            if let Ok(channel) = channel_id.to_channel(http.http()).await {
+                let guild_channel = channel.guild()?;
+                match guild_channel.members(http.cache().unwrap()).ok()?
+                    .iter()
+                    .find(|member| member.user.id == user_id) {
+                    Some(_) => {
+                        return Some(channel_id);
+                    } None => {
+                        // User not found in this channel, continue
+                        continue;
+                    }
+                }
+            }
+        }
     }
+    None
 }
 
 /// Get all voice channels in a guild
@@ -857,10 +868,38 @@ async fn execute_enforcement(http: &Http, data: &Data, enforcement_id: &str) -> 
                 .await?;
             }
             EnforcementAction::Ban { duration } => {
-                handle_ban_action(http, guild_id, user_id, duration, false).await?;
+                let duration = if let Some(dur) = duration {
+                    *dur
+                } else {
+                    0
+                };
+                warn!(
+                    target: crate::COMMAND_TARGET,
+                    enforcement_id = %pending.id,
+                    user_id = %user_id,
+                    guild_id = %guild_id,
+                    duration = %duration,
+                    event = "enforcement_ban",
+                    "*NOT* Executing ban action, don't be a pussy and uncomment this call"
+                );
+                //handle_ban_action(http, guild_id, user_id, duration, false).await?;
             }
             EnforcementAction::Kick { delay } => {
-                handle_kick_action(http, guild_id, user_id, delay, false).await?;
+                let delay = if let Some(dur) = delay {
+                    *dur
+                } else {
+                    0
+                };
+                warn!(
+                    target: crate::COMMAND_TARGET,
+                    enforcement_id = %pending.id,
+                    user_id = %user_id,
+                    guild_id = %guild_id,
+                    delay = %delay,
+                    event = "enforcement_kick",
+                    "*NOT* Executing kick action, don't be a pussy and uncomment this call"
+                );
+                //handle_kick_action(http, guild_id, user_id, delay, false).await?;
             }
             EnforcementAction::VoiceMute { duration } => {
                 handle_voice_mute_action(http, guild_id, user_id, duration, false).await?;

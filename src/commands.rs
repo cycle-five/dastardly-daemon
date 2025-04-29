@@ -1337,6 +1337,13 @@ async fn log_daemon_warning(
                 "The daemon has been summoned. Enforcement action is being applied.",
                 false,
             );
+        } else {
+            // This is for reversal of a previous enforcement
+            embed = embed.field(
+                "⚠️ Enforcement Reversal",
+                "Your penance has been payed. The daemon has lifted the punishment.",
+                false,
+            );
         }
 
         let message = serenity::CreateMessage::new().embed(embed);
