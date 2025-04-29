@@ -532,16 +532,15 @@ async fn get_user_voice_channel(
         for channel_id in voice_channels {
             if let Ok(channel) = channel_id.to_channel(http.http()).await {
                 let guild_channel = channel.guild()?;
-                match guild_channel.members(http.cache().unwrap()).ok()?
+                if guild_channel
+                    .members(http.cache().unwrap())
+                    .ok()?
                     .iter()
-                    .find(|member| member.user.id == user_id) {
-                    Some(_) => {
-                        return Some(channel_id);
-                    } None => {
-                        // User not found in this channel, continue
-                        continue;
-                    }
+                    .any(|member| member.user.id == user_id)
+                {
+                    return Some(channel_id);
                 }
+                // User not found in this channel, continue
             }
         }
     }
@@ -868,11 +867,7 @@ async fn execute_enforcement(http: &Http, data: &Data, enforcement_id: &str) -> 
                 .await?;
             }
             EnforcementAction::Ban { duration } => {
-                let duration = if let Some(dur) = duration {
-                    *dur
-                } else {
-                    0
-                };
+                let duration = if let Some(dur) = duration { *dur } else { 0 };
                 warn!(
                     target: crate::COMMAND_TARGET,
                     enforcement_id = %pending.id,
@@ -885,11 +880,7 @@ async fn execute_enforcement(http: &Http, data: &Data, enforcement_id: &str) -> 
                 //handle_ban_action(http, guild_id, user_id, duration, false).await?;
             }
             EnforcementAction::Kick { delay } => {
-                let delay = if let Some(dur) = delay {
-                    *dur
-                } else {
-                    0
-                };
+                let delay = if let Some(dur) = delay { *dur } else { 0 };
                 warn!(
                     target: crate::COMMAND_TARGET,
                     enforcement_id = %pending.id,
