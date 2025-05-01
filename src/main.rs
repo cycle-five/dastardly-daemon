@@ -24,7 +24,9 @@ pub const CONSOLE_TARGET: &str = "dastardly_daemon";
 /// Main function to run the bot
 async fn async_main() -> Result<(), Error> {
     // Initialize logging
-    logging::init()?;
+    logging::init(None)?;
+    let log_sizes = logging::get_log_sizes("logs".to_string())?;
+    info!("Log sizes: {:?}", log_sizes);
 
     // Load environment variables
     let token = env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN must be set");
@@ -97,7 +99,7 @@ async fn async_main() -> Result<(), Error> {
         })
         .setup(|ctx, _ready, framework| {
             Box::pin(async move {
-                logging::log_console(
+                info!(
                     "Registering commands and return data, this will go away in the next version of poise"
                 );
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;

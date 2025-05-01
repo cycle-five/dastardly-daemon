@@ -13,7 +13,7 @@ use tracing_subscriber::{
 };
 
 /// Log directory name
-pub const LOG_DIR: &str = "logs";
+pub const DEFAULT_LOG_DIR: &str = "logs";
 /// Command log file name
 pub const COMMAND_LOG_FILE: &str = "commands";
 /// Event log file name
@@ -26,20 +26,20 @@ pub const _BOT_NAME: &str = "dastardly_daemon";
 pub const COMMAND_TARGET: &str = "dastardly_daemon::command";
 pub const ERROR_TARGET: &str = "dastardly_daemon::error";
 pub const EVENT_TARGET: &str = "dastardly_daemon::handlers";
-pub const CONSOLE_TARGET: &str = "dastardly_daemon";
 
 /// Initialize the logging system with console and file outputs
 /// # Errors
 /// - Errors if log directory can't be created.
-pub fn init() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+pub fn init(log_dir: Option<String>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Create log directory if it doesn't exist
-    if !Path::new(LOG_DIR).exists() {
-        std::fs::create_dir_all(LOG_DIR)?;
+    let log_dir = log_dir.unwrap_or_else(|| DEFAULT_LOG_DIR.to_string());
+    if !Path::new(&log_dir).exists() {
+        std::fs::create_dir_all(&log_dir)?;
     }
 
     // Set up file appenders with daily rotation
-    let command_file = RollingFileAppender::new(Rotation::DAILY, LOG_DIR, COMMAND_LOG_FILE);
-    let event_file = RollingFileAppender::new(Rotation::DAILY, LOG_DIR, EVENTS_LOG_FILE);
+    let command_file = RollingFileAppender::new(Rotation::DAILY, &log_dir, COMMAND_LOG_FILE);
+    let event_file = RollingFileAppender::new(Rotation::DAILY, &log_dir, EVENTS_LOG_FILE);
 
     let command_filter = EnvFilter::new(format!("{COMMAND_TARGET}=info"));
     let event_filter = EnvFilter::new(format!("{EVENT_TARGET}=info"));
@@ -201,13 +201,27 @@ pub fn log_command_error(error: &FrameworkError<'_, Data, Error>) {
     }
 }
 
-/// Log messages to the console
-pub fn log_console(message: &str) {
-    info!(
-        target: CONSOLE_TARGET,
-        message = %message,
-        event = "console",
-    );
+/// Log the size of the command and event log files
+/// # Errors
+/// - Errors if the log files can't be accessed.
+pub fn get_log_sizes(log_dir: String) -> Result<(u64, u64), Error> {
+    let command_log_path = format!("{log_dir}/{COMMAND_LOG_FILE}.*");
+    let event_log_path = format!("{log_dir}/{EVENTS_LOG_FILE}.*");
+    let command_log_paths = glob::glob(&command_log_path)?;
+    let event_log_paths = glob::glob(&event_log_path)?;
+
+    let command_logs_size = command_log_paths
+        .filter_map(|entry| entry.ok())
+        .filter_map(|path| std::fs::metadata(path).ok())
+        .map(|meta| meta.len())
+        .sum::<u64>();
+    let event_logs_size = event_log_paths
+        .filter_map(|entry| entry.ok())
+        .filter_map(|path| std::fs::metadata(path).ok())
+        .map(|meta| meta.len())
+        .sum::<u64>();
+
+    Ok((command_logs_size, event_logs_size))
 }
 
 #[cfg(test)]
@@ -230,16 +244,20 @@ mod tests {
             }
 
             // Initialize logging with test configuration
-            let _ = init();
+            let _ = init(Some(TEST_LOG_DIR.to_string()));
         });
     }
 
     #[test]
-    fn test_log_console() {
+    fn test_get_log_sizes() {
         setup();
 
+        info!("Testing log sizes...");
+
         // Test that log_console doesn't panic
-        log_console("Test message");
+        let (command_log_size, event_log_size) = get_log_sizes("test_logs".to_string()).unwrap();
+        assert_eq!(command_log_size, 0);
+        assert_eq!(event_log_size, 0);
     }
 
     #[test]
