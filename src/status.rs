@@ -55,7 +55,7 @@ pub struct BotStatus {
     /// Map of active voice channels (`channel_id` -> `VoiceChannelStatus`)
     pub active_voice_channels: DashMap<ChannelId, VoiceChannelStatus>,
     /// Map of users in voice channels (`user_id` -> `UserVoiceStatus`)
-    pub users_in_voice: DashMap<UserId, UserVoiceStatus>,
+    pub users_in_voice: DashMap<(UserId, GuildId), UserVoiceStatus>,
     /// Last time a status check was performed
     pub last_status_check: SystemTime,
 }
@@ -86,8 +86,9 @@ impl BotStatus {
 
         // First pass: Update user warning and enforcement status
         for user_entry in &status.users_in_voice {
-            let user_id = *user_entry.key();
-            let guild_id = user_entry.value().guild_id;
+            let key = *user_entry.key();
+            let (user_id, guild_id) = key;
+            // let guild_id = user_entry.value().guild_id;
 
             // Check for warnings
             let has_warnings = data.warnings.iter().any(|w| {
@@ -109,7 +110,7 @@ impl BotStatus {
             let warning_score = data.calculate_warning_score(user_id.get(), guild_id.get());
 
             // Update user status
-            if let Some(mut user_status) = status.users_in_voice.get_mut(&user_id) {
+            if let Some(mut user_status) = status.users_in_voice.get_mut(&key) {
                 user_status.has_warnings = has_warnings;
                 user_status.has_enforcements = has_enforcements;
                 user_status.warning_score = warning_score;
@@ -120,12 +121,14 @@ impl BotStatus {
         // Second pass: Update channel statistics based on user status
         for channel_entry in &status.active_voice_channels {
             let channel_id = *channel_entry.key();
+            let guild_id = channel_entry.value().guild_id;
             let mut warned_count = 0;
             let mut enforced_count = 0;
 
             // Count warned and enforced users in this channel
             for user_id in &channel_entry.value().users {
-                if let Some(user_status) = status.users_in_voice.get(user_id) {
+                let key = (*user_id, guild_id);
+                if let Some(user_status) = status.users_in_voice.get(&key) {
                     if user_status.has_warnings {
                         warned_count += 1;
                     }
@@ -212,7 +215,7 @@ impl BotStatus {
             joined_at: now,
             last_updated: now,
         };
-        self.users_in_voice.insert(user_id, user_status);
+        self.users_in_voice.insert((user_id, guild_id), user_status);
 
         // Recalculate channel statistics
         self.recalculate_channel_stats(channel_id);
@@ -222,6 +225,7 @@ impl BotStatus {
     pub fn user_left_voice(&self, channel_id: ChannelId, user_id: UserId) {
         // Remove user from channel
         if let Some(mut channel_status) = self.active_voice_channels.get_mut(&channel_id) {
+            let guild_id = channel_status.guild_id;
             channel_status.users.remove(&user_id);
             channel_status.last_updated = SystemTime::now();
 
@@ -234,10 +238,9 @@ impl BotStatus {
                 drop(channel_status); // Drop the reference before recalculation
                 self.recalculate_channel_stats(channel_id);
             }
+            // Remove or update user status
+            self.users_in_voice.remove(&(user_id, guild_id));
         }
-
-        // Remove or update user status
-        self.users_in_voice.remove(&user_id);
     }
 
     /// Called when a user moves from one voice channel to another
@@ -261,9 +264,11 @@ impl BotStatus {
         if let Some(mut channel_status) = self.active_voice_channels.get_mut(&channel_id) {
             let mut warned_count = 0;
             let mut enforced_count = 0;
+            let guild_id = channel_status.guild_id;
 
             for user_id in &channel_status.users {
-                if let Some(user_status) = self.users_in_voice.get(user_id) {
+                let key = (*user_id, guild_id);
+                if let Some(user_status) = self.users_in_voice.get(&key) {
                     if user_status.value().has_warnings {
                         warned_count += 1;
                     }
