@@ -53,18 +53,14 @@ impl EventHandler for Handler {
 
                 // User left a voice channel
                 (Some(old_channel), None) => {
-                    info!(
-                        "User {} left voice channel {} in guild {}",
-                        user_id, old_channel, guild_id
-                    );
+                    info!("User {user_id} left voice channel {old_channel} in guild {guild_id}",);
                     data.status.user_left_voice(old_channel, user_id);
                 }
 
                 // User moved between voice channels
                 (Some(old_channel), Some(new_channel)) if old_channel != new_channel => {
                     info!(
-                        "User {} moved from voice channel {} to {} in guild {}",
-                        user_id, old_channel, new_channel, guild_id
+                        "User {user_id} moved from voice channel {old_channel} to {new_channel} in guild {guild_id}",
                     );
                     data.status.user_moved_voice(
                         guild_id,

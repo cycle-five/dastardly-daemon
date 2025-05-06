@@ -202,7 +202,7 @@ impl BotStatus {
                 channel_id,
                 guild_id,
                 name: channel_name,
-               ..Default::default() 
+                ..Default::default()
             });
 
         channel_status.users.insert(user_id);
@@ -310,7 +310,7 @@ impl BotStatus {
 
     /// Get a list of active voice channels that have users with warnings or enforcements
     #[must_use]
-    pub fn _get_channels_with_issues(&self) -> Vec<VoiceChannelStatus> {
+    pub fn get_channels_with_issues(&self) -> Vec<VoiceChannelStatus> {
         self.active_voice_channels
             .iter()
             .filter(|entry| {
@@ -509,8 +509,8 @@ pub fn format_problematic_users(bot_status: &BotStatus, data: &Data) -> String {
 
         // Add user info with score
         result.push_str(&format!(
-            "- {} **{}** (Score: {:.2}){}",
-            status, user_name, user.warning_score, channel_info
+            "- {status} **{user_name}** (Score: {:.2}){channel_info}",
+            user.warning_score
         ));
 
         result.push('\n');
@@ -602,6 +602,12 @@ pub fn format_enforcement_status(data: &Data) -> String {
     result
 }
 
+impl Display for EnforcementAction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", format_enforcement_action(self))
+    }
+}
+
 /// Format an enforcement action in a human-readable way
 fn format_enforcement_action(action: &EnforcementAction) -> String {
     match action {
@@ -677,6 +683,26 @@ pub fn format_complete_status(bot_status: &BotStatus, data: &Data) -> String {
     result.push_str(&format!(
         "**Users in Voice**: {total_users} (with {issue_users} having warnings/enforcements)\n",
     ));
+
+    let channels_with_issues = bot_status.get_channels_with_issues();
+    let num_channels_with_issues = channels_with_issues.len();
+    let num_users_with_issues = bot_status
+        .users_in_voice
+        .iter()
+        .filter(|entry| entry.value().has_warnings || entry.value().has_enforcements)
+        .count();
+
+    // Add problematic channels/users
+    if num_channels_with_issues > 0 {
+        result.push_str(&format!(
+            "**Problematic Channels**: {num_channels_with_issues} channels with warned/enforced users\n"
+        ));
+    }
+    if num_users_with_issues > 0 {
+        result.push_str(&format!(
+            "**Problematic Users**: {num_users_with_issues} users with warnings/enforcements\n"
+        ));
+    }
 
     // Add pending/active enforcement counts
     let pending_count = data.pending_enforcements.len();
@@ -781,8 +807,8 @@ pub fn _create_status_embed(bot_status: &BotStatus, data: &Data) -> CreateEmbed 
             };
 
             user_list.push_str(&format!(
-                "{} **{}** - Score: {:.2}\n",
-                status, user_name, user.warning_score
+                "{status} **{user_name}** - Score: {:.2}\n",
+                user.warning_score
             ));
         }
 
