@@ -25,7 +25,7 @@ pub const CONSOLE_TARGET: &str = "dastardly_daemon";
 async fn async_main() -> Result<(), Error> {
     // Initialize logging
     logging::init(None)?;
-    let log_sizes = logging::get_log_sizes("logs".to_string())?;
+    let log_sizes = logging::get_log_sizes("logs")?;
     info!("Log sizes: {:?}", log_sizes);
 
     // Load environment variables

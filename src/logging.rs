@@ -204,19 +204,19 @@ pub fn log_command_error(error: &FrameworkError<'_, Data, Error>) {
 /// Log the size of the command and event log files
 /// # Errors
 /// - Errors if the log files can't be accessed.
-pub fn get_log_sizes(log_dir: String) -> Result<(u64, u64), Error> {
+pub fn get_log_sizes(log_dir: &str) -> Result<(u64, u64), Error> {
     let command_log_path = format!("{log_dir}/{COMMAND_LOG_FILE}.*");
     let event_log_path = format!("{log_dir}/{EVENTS_LOG_FILE}.*");
     let command_log_paths = glob::glob(&command_log_path)?;
     let event_log_paths = glob::glob(&event_log_path)?;
 
     let command_logs_size = command_log_paths
-        .filter_map(|entry| entry.ok())
+        .filter_map(Result::ok)
         .filter_map(|path| std::fs::metadata(path).ok())
         .map(|meta| meta.len())
         .sum::<u64>();
     let event_logs_size = event_log_paths
-        .filter_map(|entry| entry.ok())
+        .filter_map(Result::ok)
         .filter_map(|path| std::fs::metadata(path).ok())
         .map(|meta| meta.len())
         .sum::<u64>();
@@ -255,7 +255,7 @@ mod tests {
         info!("Testing log sizes...");
 
         // Test that log_console doesn't panic
-        let (command_log_size, event_log_size) = get_log_sizes("test_logs".to_string()).unwrap();
+        let (command_log_size, event_log_size) = get_log_sizes("test_logs").unwrap();
         assert_eq!(command_log_size, 0);
         assert_eq!(event_log_size, 0);
     }
