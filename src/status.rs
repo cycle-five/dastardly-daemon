@@ -4,12 +4,12 @@ use poise::serenity_prelude as serenity;
 use serenity::builder::CreateEmbed;
 use serenity::model::id::{ChannelId, GuildId, UserId};
 use std::collections::HashSet;
+use std::fmt::{Display, Formatter};
 use std::time::SystemTime;
 use tracing::info;
 
 /// Structure to track voice channel activity
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct VoiceChannelStatus {
     /// Channel ID
     pub channel_id: ChannelId,
@@ -25,6 +25,33 @@ pub struct VoiceChannelStatus {
     pub enforced_user_count: usize,
     /// Last time this channel was updated
     pub last_updated: SystemTime,
+}
+
+impl Default for VoiceChannelStatus {
+    fn default() -> Self {
+        Self {
+            channel_id: ChannelId::new(1),
+            guild_id: GuildId::new(1),
+            name: String::new(),
+            users: HashSet::new(),
+            warned_user_count: 0,
+            enforced_user_count: 0,
+            last_updated: SystemTime::now(),
+        }
+    }
+}
+
+impl Display for VoiceChannelStatus {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Channel ID: {}, Guild ID: {}, Name: {}, Users: {}",
+            self.channel_id,
+            self.guild_id,
+            self.name,
+            self.users.len()
+        )
+    }
 }
 
 /// Structure to track a user's voice activity
@@ -175,10 +202,7 @@ impl BotStatus {
                 channel_id,
                 guild_id,
                 name: channel_name,
-                users: HashSet::new(),
-                warned_user_count: 0,
-                enforced_user_count: 0,
-                last_updated: now,
+               ..Default::default() 
             });
 
         channel_status.users.insert(user_id);
