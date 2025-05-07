@@ -532,15 +532,18 @@ async fn get_user_voice_channel(
         for channel_id in voice_channels {
             if let Ok(channel) = channel_id.to_channel(http.http()).await {
                 let guild_channel = channel.guild()?;
-                if guild_channel
-                    .members(http.cache().unwrap())
-                    .ok()?
-                    .iter()
-                    .any(|member| member.user.id == user_id)
-                {
+                let res = http.cache().map(|cache| {
+                    guild_channel
+                        .members(cache)
+                        .map(|members| members.iter().any(|member| member.user.id == user_id))
+                });
+                let res = res.unwrap_or_else(|| Ok(false));
+                if res.unwrap_or(false) {
+                    // User found in this channel
+                    info!("User {user_id} is in voice channel {channel_id}");
                     return Some(channel_id);
                 }
-                // User not found in this channel, continue
+                // User not found in this channel, continue searching
             }
         }
     }

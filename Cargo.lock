@@ -1566,6 +1566,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_repr"
+version = "0.1.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "175ee3e80ae9982737ca543e96133087cbd9a485eecc3bc4de9c1a37b47ea59c"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.101",
+]
+
+[[package]]
 name = "serde_urlencoded"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1609,6 +1620,7 @@ dependencies = [
  "fxhash",
  "levenshtein",
  "mime_guess",
+ "mini-moka",
  "parking_lot",
  "percent-encoding",
  "reqwest",
@@ -1616,6 +1628,7 @@ dependencies = [
  "serde",
  "serde_cow",
  "serde_json",
+ "serenity-voice-model",
  "static_assertions",
  "time",
  "tokio",
@@ -1625,6 +1638,19 @@ dependencies = [
  "typesize",
  "url",
  "uwl",
+]
+
+[[package]]
+name = "serenity-voice-model"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "593682f6155d07c8b331b3d1060f5aab7e6796caca9f2f66bd9e6855c880e06b"
+dependencies = [
+ "bitflags 2.9.0",
+ "num-traits",
+ "serde",
+ "serde_json",
+ "serde_repr",
 ]
 
 [[package]]
@@ -1884,9 +1910,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.44.2"
+version = "1.45.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6b88822cbe49de4185e3a4cbf8321dd487cf5fe0c5c65695fef6346371e9c48"
+checksum = "2513ca694ef9ede0fb23fe71a4ee4107cb102b9dc1930f6d0fd77aae068ae165"
 dependencies = [
  "backtrace",
  "bytes",
