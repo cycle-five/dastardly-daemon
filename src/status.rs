@@ -79,9 +79,9 @@ pub struct UserVoiceStatus {
 /// Main status tracking struct
 #[derive(Debug, Clone)]
 pub struct BotStatus {
-    /// Map of active voice channels (`channel_id` -> `VoiceChannelStatus`)
+    /// Map of active voice channels (`ChannelId` -> `VoiceChannelStatus`)
     pub active_voice_channels: DashMap<ChannelId, VoiceChannelStatus>,
-    /// Map of users in voice channels (`user_id` -> `UserVoiceStatus`)
+    /// Map of users in voice channels ((`UserId`, `GuildId`) -> `UserVoiceStatus`)
     pub users_in_voice: DashMap<(UserId, GuildId), UserVoiceStatus>,
     /// Last time a status check was performed
     pub last_status_check: SystemTime,

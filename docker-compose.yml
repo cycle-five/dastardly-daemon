@@ -1,0 +1,21 @@
+services:
+  dastardly-daemon:
+    build: .
+    image: dastardly-daemon:dev
+    container_name: dastardly-daemon
+    restart: unless-stopped
+    environment:
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - RUST_LOG=info,serenity=error
+    volumes:
+      # - ./data:/app/data
+      # - ./logs:/app/logs
+      - daemon_app_data:/app/data
+      - daemon_app_logs:/app/logs
+volumes:
+  daemon_app_data:
+    external: true
+    #driver: local
+  daemon_app_logs:
+    external: true
+    #driver: local

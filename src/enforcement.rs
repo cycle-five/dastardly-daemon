@@ -164,7 +164,7 @@ async fn check_all_enforcements(http: &Http, data: &Data) -> Result<(), Error> {
     // Save updated data if anything was executed or reversed
     if !enforcements_to_execute.is_empty() || !enforcements_to_reverse.is_empty() {
         if let Err(e) = data.save().await {
-            error!("Failed to save data after enforcement operations: {}", e);
+            error!("Failed to save data after enforcement operations: {e}");
         }
     }
 

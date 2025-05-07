@@ -582,7 +582,7 @@ impl DataInner {
     /// - The guild configurations cannot be serialized to YAML
     /// - The YAML data cannot be written to the config file
     pub async fn save(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        const CONFIG_DIR: &str = "config";
+        const CONFIG_DIR: &str = "data";
         const CONFIG_FILE: &str = "data/bot_config.yaml";
         const WARNINGS_FILE: &str = "data/warnings.yaml";
         const ENFORCEMENTS_FILE: &str = "data/enforcements.yaml";

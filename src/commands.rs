@@ -1416,7 +1416,7 @@ async fn notify_enforcement_task(ctx: &Context<'_, Data, Error>, user_id: u64, g
 /// Saves data with appropriate error handling
 async fn save_data(ctx: &Context<'_, Data, Error>, error_context: &str) -> Result<(), Error> {
     if let Err(e) = ctx.data().save().await {
-        error!("Failed to save data after {}: {}", error_context, e);
+        error!("Failed to save data after {error_context}: {e}");
         return Err(e);
     }
     Ok(())
