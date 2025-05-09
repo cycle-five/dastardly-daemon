@@ -1,7 +1,7 @@
 services:
   dastardly-daemon:
     build: .
-    image: dastardly-daemon:dev
+    image: cyclefive/dastardly-daemon:dev
     container_name: dastardly-daemon
     restart: unless-stopped
     environment:
