@@ -3,6 +3,7 @@ use crate::{Data, Error};
 use chrono::{DateTime, Utc};
 use poise::serenity_prelude::{GuildId, Http, UserId, builder::EditMember};
 use serenity::all::{CacheHttp, ChannelId};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::time::Duration;
@@ -528,17 +529,26 @@ async fn get_user_voice_channel(
     // Fallback to HTTP if the guild is not in cache
     if let Ok(guild) = guild_id.to_partial_guild(http).await {
         // Get member to find the voice channel
-        let voice_channels = get_guild_voice_channels(http.http(), &guild).await.ok()?;
+        let voice_channels = get_guild_voice_channels(http.http(), &guild).await;
+        info!(
+            "Number of voice channels in guild {guild_id}: {}",
+            voice_channels.len()
+        );
         for channel_id in voice_channels {
             if let Ok(channel) = channel_id.to_channel(http.http()).await {
+                let channel_name = channel_id
+                    .name(http.http())
+                    .await
+                    .unwrap_or("Unknown".to_string());
+                info!("Checking channel {channel_name}");
                 let guild_channel = channel.guild()?;
                 let res = http.cache().map(|cache| {
                     guild_channel
                         .members(cache)
                         .map(|members| members.iter().any(|member| member.user.id == user_id))
                 });
-                let res = res.unwrap_or_else(|| Ok(false));
-                if res.unwrap_or(false) {
+                let res = res.unwrap_or_else(|| Ok(false)).unwrap_or(false);
+                if res {
                     // User found in this channel
                     info!("User {user_id} is in voice channel {channel_id}");
                     return Some(channel_id);
@@ -554,8 +564,11 @@ async fn get_user_voice_channel(
 async fn get_guild_voice_channels(
     http: &Http,
     guild: &serenity::all::PartialGuild,
-) -> Result<Vec<ChannelId>, Error> {
-    let channels = guild.channels(http).await?;
+) -> Vec<ChannelId> {
+    let channels = guild.channels(http).await.unwrap_or_else(|_| {
+        error!("Failed to get channels for guild {}", guild.id);
+        HashMap::new()
+    });
 
     let voice_channels = channels
         .iter()
@@ -568,7 +581,7 @@ async fn get_guild_voice_channels(
         })
         .collect::<Vec<_>>();
 
-    Ok(voice_channels)
+    voice_channels
 }
 
 /// Handle voice channel haunting enforcement action
@@ -612,13 +625,7 @@ async fn handle_voice_channel_haunt_action(
     let original_id = original_channel_id.unwrap_or(voice_channel_id.get());
 
     // Get all voice channels in the guild
-    let voice_channels = match get_guild_voice_channels(http, &guild).await {
-        Ok(channels) => channels,
-        Err(e) => {
-            error!("Failed to get voice channels: {e}");
-            return Ok(());
-        }
-    };
+    let voice_channels = get_guild_voice_channels(http, &guild).await;
 
     if voice_channels.is_empty() {
         error!("No voice channels found in guild {guild_id} for haunting");

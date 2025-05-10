@@ -587,10 +587,7 @@ pub fn format_enforcement_status(data: &Data) -> String {
 
             // Add reversal time if set
             let reversal_info = if let Some(reverse_at) = &enforcement.reverse_at {
-                format!(
-                    " - Will be reversed at {}",
-                    reverse_at.split('T').next().unwrap_or(reverse_at)
-                )
+                format!(" - Will be reversed at {reverse_at}")
             } else {
                 String::new()
             };

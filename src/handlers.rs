@@ -43,10 +43,7 @@ impl EventHandler for Handler {
             match (old.and_then(|vs| vs.channel_id), new.channel_id) {
                 // User joined a voice channel
                 (None, Some(new_channel)) => {
-                    info!(
-                        "User {} joined voice channel {} in guild {}",
-                        user_id, new_channel, guild_id
-                    );
+                    info!("User {user_id} joined voice channel {new_channel} in guild {guild_id}");
                     data.status
                         .user_joined_voice(guild_id, new_channel, user_id, &data);
                 }
