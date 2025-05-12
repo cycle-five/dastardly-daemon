@@ -7,6 +7,7 @@ use std::{
 
 use crate::enforcement::EnforcementCheckRequest;
 use crate::status::BotStatus;
+use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use poise::serenity_prelude as serenity;
 use serde::{Deserialize, Serialize};
@@ -115,7 +116,7 @@ pub struct Warning {
     pub issuer_id: u64,
     pub guild_id: u64,
     pub reason: String,
-    pub timestamp: String,
+    pub timestamp: DateTime<Utc>,
     pub notification_method: NotificationMethod,
     pub enforcement: Option<EnforcementAction>,
 }
@@ -739,7 +740,7 @@ mod tests {
             issuer_id: 67890,
             guild_id: 11111,
             reason: "Test warning".to_string(),
-            timestamp: "2023-01-01T00:00:00Z".to_string(),
+            timestamp: "2023-01-01T00:00:00Z".parse().unwrap(),
             notification_method: NotificationMethod::PublicWithMention,
             enforcement: Some(EnforcementAction::Kick { delay: Some(86400) }),
         };

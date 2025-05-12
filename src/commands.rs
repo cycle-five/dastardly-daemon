@@ -10,7 +10,7 @@ use crate::{
     },
 };
 type Error = Box<dyn std::error::Error + Send + Sync>;
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 use poise::serenity_prelude as serenity;
 use poise::serenity_prelude::{Colour, CreateEmbed, CreateMessage, Mentionable, Timestamp, User};
 use poise::{Context, command};
@@ -188,7 +188,7 @@ fn calculate_adjusted_warning_score(base_score: f64, chaos_factor: f32) -> (f64,
     (adjusted_score, random_factor)
 }
 
-// Helper function to create and store a warning
+/// Helper function to create and store a warning
 fn create_and_insert_warning(
     ctx_data: &Data,
     user_id: u64,
@@ -197,9 +197,9 @@ fn create_and_insert_warning(
     reason: String,
     notification_method: NotificationMethod,
     enforcement_action: Option<EnforcementAction>,
-) -> (String, String) {
+) -> (String, DateTime<Utc>) {
     let warning_id = uuid::Uuid::new_v4().to_string();
-    let now = chrono::Utc::now().to_rfc3339();
+    let now = chrono::Utc::now();
 
     // Create a formal warning record
     let warning = Warning {
@@ -208,7 +208,7 @@ fn create_and_insert_warning(
         issuer_id,
         guild_id,
         reason,
-        timestamp: now.clone(),
+        timestamp: now,
         notification_method,
         enforcement: enforcement_action,
     };
@@ -219,7 +219,7 @@ fn create_and_insert_warning(
     (warning_id, now)
 }
 
-// Helper function to notify the target user
+/// Helper function to notify the target user
 async fn notify_target_user(
     ctx: &Context<'_, Data, Error>,
     user: &User,
@@ -227,45 +227,43 @@ async fn notify_target_user(
     notification_method: &NotificationMethod,
     demonic_message: &str,
 ) -> Result<(), Error> {
+    // N.B. 1a) We pull out the name here to avoid holding a non-send object across an await.
+    let name = if let Some(guild) = ctx.guild() {
+        guild.name.clone()
+    } else {
+        "Unknown Guild".to_string()
+    };
     match notification_method {
         NotificationMethod::DirectMessage => {
+            //  N.B. 1b) Here is the problematic await.
             if let Ok(channel) = user.create_dm_channel(&ctx.http()).await {
                 // For voice infractions, use a more natural demonic message without embeds
                 if is_voice {
                     let message = CreateMessage::new().content(format!(
-                        "**[DAEMON WHISPERS]** {}\n\nYou have been warned in {}",
-                        demonic_message,
-                        ctx.guild().unwrap().name,
+                        "**[DAEMON WHISPERS]** {demonic_message}\n\nYou have been warned in {name}",
                     ));
-                    let _ = channel.send_message(&ctx.http(), message).await;
+                    channel.send_message(&ctx.http(), message).await?;
                 } else {
                     // For non-voice infractions, use a simpler format but still include the demonic message
                     let message = CreateMessage::new().content(format!(
-                        "**[DAEMON SPEAKS]** {}\n\nYou have been warned in {}",
-                        demonic_message,
-                        ctx.guild().unwrap().name,
+                        "**[DAEMON SPEAKS]** {demonic_message}\n\nYou have been warned in {name}"
                     ));
-                    let _ = channel.send_message(&ctx.http(), message).await;
+                    channel.send_message(&ctx.http(), message).await?;
                 }
             }
         }
         NotificationMethod::PublicWithMention => {
             // For voice infractions, use a more natural demonic message without embeds
             if is_voice {
-                let content = format!(
-                    "**[DAEMON ROARS]** {}\n\n{}",
-                    demonic_message,
-                    user.mention()
-                );
-                let _ = ctx.say(content).await;
+                let content = format!("**[DAEMON ROARS]** {demonic_message}\n\n{}", user.mention());
+                ctx.say(content).await?;
             } else {
                 // For non-voice infractions, use a simpler format but still include the demonic message
                 let content = format!(
-                    "**[DAEMON DECLARES]** {}\n\n{}",
-                    demonic_message,
+                    "**[DAEMON DECLARES]** {demonic_message}\n\n{}",
                     user.mention(),
                 );
-                let _ = ctx.say(content).await;
+                ctx.say(content).await?;
             }
         }
     }
@@ -498,14 +496,14 @@ pub async fn warn(
 
     // Create warning
     let warning_id = Uuid::new_v4().to_string();
-    let now = Utc::now().to_rfc3339();
+    let now = Utc::now();
     let warning = Warning {
         id: warning_id.clone(),
         user_id: user.id.get(),
         issuer_id: ctx.author().id.get(),
         guild_id: guild_id.get(),
         reason,
-        timestamp: now.clone(),
+        timestamp: now,
         notification_method,
         enforcement: enforcement.clone(),
     };
@@ -948,11 +946,7 @@ pub async fn judgment_history(
         content.push_str("No transgressions recorded... yet.\n");
     } else {
         for (i, warning) in warnings.iter().take(10).enumerate() {
-            let timestamp = warning
-                .timestamp
-                .split('T')
-                .next()
-                .unwrap_or(&warning.timestamp);
+            let timestamp = warning.timestamp;
             let issuer = ctx
                 .http()
                 .get_user(warning.issuer_id.into())

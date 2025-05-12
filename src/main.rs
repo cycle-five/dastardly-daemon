@@ -42,10 +42,6 @@ async fn async_main() -> Result<(), Error> {
     // Set the enforcement sender in data BEFORE wrapping in Arc
     data.set_enforcement_tx(enforcement_tx);
 
-    // Initialize the status tracker with the current data
-    info!("Initializing status tracker...");
-    data.status.initialize_from_cache(&data);
-
     // Now wrap the data in Arc for thread-safe sharing
     // let data = Arc::new(data);
     let data_cloned = data.clone();

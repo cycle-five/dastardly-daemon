@@ -68,8 +68,7 @@ async fn enforcement_task(
     check_interval_seconds: u64,
 ) {
     info!(
-        "Starting enforcement task with {}s interval",
-        check_interval_seconds
+        "Starting enforcement task with {check_interval_seconds}s interval",
     );
 
     let check_interval = Duration::from_secs(check_interval_seconds);

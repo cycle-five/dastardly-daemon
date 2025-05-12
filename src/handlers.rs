@@ -24,6 +24,18 @@ impl EventHandler for Handler {
                 "Cache guild count mismatch: {guild_count_cache} (cache) vs {guild_count} (actual)"
             );
         }
+
+        if let Some(data) = {
+            let data_read = ctx.data.read().await;
+            data_read.get::<Data>().cloned()
+        } {
+            // Initialize the status tracker with the current data
+            info!("Initializing status tracker...");
+            data.status.initialize_from_cache(&data);
+        } else {
+            warn!("Could not get user data from context");
+        }
+
         info!("Cache ready! The bot is in {guild_count} guild(s)");
     }
 
