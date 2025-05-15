@@ -67,9 +67,7 @@ async fn enforcement_task(
     mut rx: Receiver<EnforcementCheckRequest>,
     check_interval_seconds: u64,
 ) {
-    info!(
-        "Starting enforcement task with {check_interval_seconds}s interval",
-    );
+    info!("Starting enforcement task with {check_interval_seconds}s interval",);
 
     let check_interval = Duration::from_secs(check_interval_seconds);
     let mut interval = tokio::time::interval(check_interval);
@@ -126,9 +124,7 @@ async fn check_all_enforcements(http: &Http, data: &Data) -> Result<(), Error> {
     for entry in &data.pending_enforcements {
         let pending = entry.value();
         if pending.state == EnforcementState::Pending {
-            let execute_at = DateTime::parse_from_rfc3339(&pending.execute_at)
-                .map_or_else(|_| DateTime::<Utc>::MIN_UTC, |dt| dt.with_timezone(&Utc));
-
+            let execute_at = pending.execute_at;
             if execute_at <= now {
                 enforcements_to_execute.push(pending.id.clone());
             }
@@ -140,10 +136,7 @@ async fn check_all_enforcements(http: &Http, data: &Data) -> Result<(), Error> {
     for entry in &data.active_enforcements {
         let active = entry.value();
         if active.state == EnforcementState::Active && active.reverse_at.is_some() {
-            if let Some(reverse_at_str) = &active.reverse_at {
-                let reverse_at = DateTime::parse_from_rfc3339(reverse_at_str)
-                    .map_or_else(|_| DateTime::<Utc>::MAX_UTC, |dt| dt.with_timezone(&Utc));
-
+            if let Some(reverse_at) = active.reverse_at {
                 if reverse_at <= now {
                     enforcements_to_reverse.push(active.id.clone());
                 }
@@ -212,13 +205,11 @@ async fn check_user_enforcements(
     for id in &enforcements_to_reverse {
         // Only reverse if the time has come
         if let Some(active) = data.active_enforcements.get(id) {
-            if let Some(reverse_at_str) = &active.reverse_at {
-                if let Ok(reverse_at) = DateTime::parse_from_rfc3339(reverse_at_str) {
-                    if reverse_at.with_timezone(&Utc) <= Utc::now() {
-                        // Drop the borrow before calling reverse_enforcement
-                        drop(active);
-                        reverse_enforcement(http, data, id).await?;
-                    }
+            if let Some(reverse_at) = &active.reverse_at {
+                if reverse_at.with_timezone(&Utc) <= Utc::now() {
+                    // Drop the borrow before calling reverse_enforcement
+                    drop(active);
+                    reverse_enforcement(http, data, id).await?;
                 }
             }
         }
@@ -259,12 +250,8 @@ async fn check_specific_enforcement(
     if let Some(active) = data.active_enforcements.get(enforcement_id) {
         // Only reverse if it's time
         if active.state == EnforcementState::Active && active.reverse_at.is_some() {
-            let should_reverse = if let Some(reverse_at_str) = &active.reverse_at {
-                if let Ok(reverse_at) = DateTime::parse_from_rfc3339(reverse_at_str) {
-                    reverse_at.with_timezone(&Utc) <= Utc::now()
-                } else {
-                    false
-                }
+            let should_reverse = if let Some(reverse_at) = &active.reverse_at {
+                reverse_at.with_timezone(&Utc) <= Utc::now()
             } else {
                 false
             };
@@ -750,7 +737,7 @@ async fn reverse_enforcement(http: &Http, data: &Data, enforcement_id: &str) -> 
     if let Some(mut active) = data.active_enforcements.get_mut(enforcement_id) {
         let guild_id = GuildId::new(active.guild_id);
         let user_id = UserId::new(active.user_id);
-        let now = Utc::now().to_rfc3339();
+        let now = Utc::now();
 
         // Apply the reversal action based on the enforcement type
         match &active.action {
@@ -836,7 +823,7 @@ fn clear_pending_enforcement(data: &Data, user_id: u64, guild_id: u64) {
             info!("Clearing pending enforcement for user {user_id} in guild {guild_id}");
             let mut updated_state = state.value().clone();
             updated_state.pending_enforcement = None;
-            updated_state.last_updated = Utc::now().to_rfc3339();
+            updated_state.last_updated = Utc::now();
 
             // Update the state
             *state = updated_state;
@@ -850,7 +837,7 @@ async fn execute_enforcement(http: &Http, data: &Data, enforcement_id: &str) -> 
     if let Some(mut pending) = data.pending_enforcements.get_mut(enforcement_id) {
         let guild_id = GuildId::new(pending.guild_id);
         let user_id = UserId::new(pending.user_id);
-        let now = Utc::now().to_rfc3339();
+        let now = Utc::now();
 
         // Execute the action based on the type
         match &pending.action {
@@ -935,7 +922,7 @@ async fn execute_enforcement(http: &Http, data: &Data, enforcement_id: &str) -> 
 
         // Update enforcement state
         pending.state = EnforcementState::Active;
-        pending.executed_at = Some(now.clone());
+        pending.executed_at = Some(now);
         pending.executed = true; // For backward compatibility
         pending.reverse_at.clone_from(&reverse_at_option);
 
@@ -978,7 +965,7 @@ async fn execute_enforcement(http: &Http, data: &Data, enforcement_id: &str) -> 
 }
 
 /// Calculate when an enforcement action should be reversed
-fn calculate_reversal_time(action: &EnforcementAction) -> Option<String> {
+fn calculate_reversal_time(action: &EnforcementAction) -> Option<DateTime<Utc>> {
     match action {
         EnforcementAction::Mute { duration }
         | EnforcementAction::Ban { duration }
@@ -987,7 +974,7 @@ fn calculate_reversal_time(action: &EnforcementAction) -> Option<String> {
             if let Some(secs) = duration {
                 if *secs > 0 {
                     // Add duration to current time
-                    Some((Utc::now() + chrono::Duration::seconds(*secs as i64)).to_rfc3339())
+                    Some(Utc::now() + chrono::Duration::seconds(*secs as i64))
                 } else {
                     None
                 }

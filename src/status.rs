@@ -559,11 +559,7 @@ pub fn format_enforcement_status(data: &Data) -> String {
 
             result.push_str(&format!(
                 "- **{user_name}**: {action_str} - Scheduled at {}\n",
-                enforcement
-                    .execute_at
-                    .split('T')
-                    .next()
-                    .unwrap_or(&enforcement.execute_at)
+                enforcement.execute_at
             ));
         }
 

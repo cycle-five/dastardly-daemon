@@ -35,9 +35,9 @@ fn main() {
     // 1. Create a pending enforcement with a duration (will need reversal)
     let enforcement_id_1 = Uuid::new_v4().to_string();
     let warning_id_1 = Uuid::new_v4().to_string();
-    let now = Utc::now().to_rfc3339();
-    let execute_at = (Utc::now() + chrono::Duration::seconds(1)).to_rfc3339();
-    let reverse_at = (Utc::now() + chrono::Duration::seconds(3)).to_rfc3339();
+    let now = Utc::now();
+    let execute_at = Utc::now() + chrono::Duration::seconds(1);
+    let reverse_at = Utc::now() + chrono::Duration::seconds(3);
 
     let enforcement1 = PendingEnforcement {
         id: enforcement_id_1.clone(),
@@ -46,9 +46,9 @@ fn main() {
         guild_id,
         action: EnforcementAction::VoiceMute { duration: Some(2) },
         execute_at,
-        reverse_at: Some(reverse_at.clone()),
+        reverse_at: Some(reverse_at),
         state: EnforcementState::Pending,
-        created_at: now.clone(),
+        created_at: now,
         executed_at: None,
         reversed_at: None,
         executed: false,
@@ -64,10 +64,10 @@ fn main() {
         user_id,
         guild_id,
         action: EnforcementAction::VoiceDisconnect { delay: Some(0) },
-        execute_at: now.clone(),
+        execute_at: now,
         reverse_at: None,
         state: EnforcementState::Pending,
-        created_at: now.clone(),
+        created_at: now,
         executed_at: None,
         reversed_at: None,
         executed: false,
@@ -93,7 +93,7 @@ fn main() {
     if let Some(mut pending) = data.pending_enforcements.get_mut(&enforcement_id_1) {
         println!("Found enforcement with id: {}", pending.id);
         pending.state = EnforcementState::Active;
-        pending.executed_at = Some(now.clone());
+        pending.executed_at = Some(now);
         pending.executed = true;
 
         // Clone it and move it to active
@@ -112,7 +112,7 @@ fn main() {
     if let Some(mut pending) = data.pending_enforcements.get_mut(&enforcement_id_2) {
         println!("Found enforcement with id: {}", pending.id);
         pending.state = EnforcementState::Completed; // One-time actions go directly to completed
-        pending.executed_at = Some(now.clone());
+        pending.executed_at = Some(now);
         pending.executed = true;
 
         // Clone it and move it to completed
@@ -144,7 +144,7 @@ fn main() {
     if let Some(mut active) = data.active_enforcements.get_mut(&enforcement_id_1) {
         println!("Found active enforcement with id: {}", active.id);
         active.state = EnforcementState::Reversed;
-        active.reversed_at = Some(Utc::now().to_rfc3339());
+        active.reversed_at = Some(Utc::now());
 
         // Clone it and move it to completed
         let enforcement_data = active.value().clone();

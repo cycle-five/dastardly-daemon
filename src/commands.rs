@@ -65,18 +65,16 @@ fn get_enforcement_action(
         );
 
         // Check if the pending enforcement is recent enough (within 14 days)
-        let is_recent =
-            if let Ok(last_updated) = chrono::DateTime::parse_from_rfc3339(&state.last_updated) {
-                // Convert to timestamp (seconds since epoch) to avoid timezone issues
-                let last_updated_timestamp = last_updated.timestamp();
-                let now_timestamp = chrono::Utc::now().timestamp();
+        let is_recent = {
+            let last_updated = state.last_updated;
+            // Convert to timestamp (seconds since epoch) to avoid timezone issues
+            let last_updated_timestamp = last_updated.timestamp();
+            let now_timestamp = chrono::Utc::now().timestamp();
 
-                // Calculate difference in days (86400 seconds per day)
-                let days_diff = (now_timestamp - last_updated_timestamp) / 86400;
-                days_diff < 7
-            } else {
-                false
-            };
+            // Calculate difference in days (86400 seconds per day)
+            let days_diff = (now_timestamp - last_updated_timestamp) / 86400;
+            days_diff < 7
+        };
 
         // Only consider it relevant if both type matches and it's recent
         is_matching_type && is_recent
@@ -116,7 +114,7 @@ fn get_enforcement_action(
         let key = format!("{user_id}:{guild_id}");
         let mut updated_state = state.clone();
         updated_state.pending_enforcement = Some(enforcement.clone());
-        updated_state.last_updated = chrono::Utc::now().to_rfc3339();
+        updated_state.last_updated = Utc::now();
         ctx_data.user_warning_states.insert(key, updated_state);
 
         Some(enforcement)
@@ -169,7 +167,7 @@ fn get_enforcement_action(
         let key = format!("{user_id}:{guild_id}");
         let mut updated_state = state.clone();
         updated_state.pending_enforcement = Some(enforcement.clone());
-        updated_state.last_updated = chrono::Utc::now().to_rfc3339();
+        updated_state.last_updated = Utc::now();
         ctx_data.user_warning_states.insert(key, updated_state);
 
         Some(enforcement)
@@ -1374,7 +1372,7 @@ async fn create_pending_enforcement(
 ) -> String {
     let enforcement_id = Uuid::new_v4().to_string();
     let execute_at = calculate_execute_at(&action);
-    let now = Utc::now().to_rfc3339();
+    let now = Utc::now();
 
     let pending = PendingEnforcement {
         id: enforcement_id.clone(),
@@ -1382,7 +1380,7 @@ async fn create_pending_enforcement(
         user_id,
         guild_id,
         action,
-        execute_at: execute_at.to_rfc3339(),
+        execute_at,
         reverse_at: None, // Will be set when executed if needed
         state: EnforcementState::Pending,
         created_at: now,

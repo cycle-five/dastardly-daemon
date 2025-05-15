@@ -18,9 +18,9 @@ async fn main() {
     // 1. Create a pending enforcement with a duration (will need reversal)
     let enforcement_id_1 = Uuid::new_v4().to_string();
     let warning_id_1 = Uuid::new_v4().to_string();
-    let now = Utc::now().to_rfc3339();
-    let execute_at = (Utc::now() + chrono::Duration::seconds(1)).to_rfc3339();
-    let reverse_at = (Utc::now() + chrono::Duration::seconds(3)).to_rfc3339();
+    let now = Utc::now();
+    let execute_at = Utc::now() + chrono::Duration::seconds(1);
+    let reverse_at = Utc::now() + chrono::Duration::seconds(3);
 
     let enforcement1 = PendingEnforcement {
         id: enforcement_id_1.clone(),
@@ -127,7 +127,7 @@ async fn main() {
     if let Some(mut active) = data.active_enforcements.get_mut(&enforcement_id_1) {
         println!("Found active enforcement with id: {}", active.id);
         active.state = EnforcementState::Reversed;
-        active.reversed_at = Some(Utc::now().to_rfc3339());
+        active.reversed_at = Some(Utc::now());
 
         // Clone it and move it to completed
         let enforcement_data = active.value().clone();

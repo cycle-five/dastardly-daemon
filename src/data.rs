@@ -184,12 +184,12 @@ pub struct PendingEnforcement {
     pub user_id: u64,
     pub guild_id: u64,
     pub action: EnforcementAction,
-    pub execute_at: String,
-    pub reverse_at: Option<String>, // When to automatically reverse the action
+    pub execute_at: DateTime<Utc>,         // When to execute the action
+    pub reverse_at: Option<DateTime<Utc>>, // When to automatically reverse the action
     pub state: EnforcementState,
-    pub created_at: String,
-    pub executed_at: Option<String>,
-    pub reversed_at: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub executed_at: Option<DateTime<Utc>>,
+    pub reversed_at: Option<DateTime<Utc>>,
     pub executed: bool, // Legacy field for backward compatibility
 }
 
@@ -232,11 +232,11 @@ impl std::fmt::Display for PendingEnforcement {
 pub struct UserWarningState {
     pub user_id: u64,
     pub guild_id: u64,
-    pub warning_timestamps: Vec<String>, // Stored as RFC3339 strings
+    pub warning_timestamps: Vec<DateTime<Utc>>, // Stored as RFC3339 strings
     pub warning_reasons: Vec<String>,
     pub mod_issuers: Vec<u64>,
     pub pending_enforcement: Option<EnforcementAction>,
-    pub last_updated: String, // RFC3339 timestamp
+    pub last_updated: DateTime<Utc>, // RFC3339 timestamp
 }
 
 /// Centralized data structure for the bot
@@ -369,7 +369,7 @@ impl Data {
                 warning_reasons: Vec::new(),
                 mod_issuers: Vec::new(),
                 pending_enforcement: None,
-                last_updated: chrono::Utc::now().to_rfc3339(),
+                last_updated: chrono::Utc::now(),
             }
         }
     }
@@ -384,10 +384,10 @@ impl Data {
         issuer_id: u64,
     ) -> UserWarningState {
         let key = format!("{user_id}:{guild_id}");
-        let timestamp = chrono::Utc::now().to_rfc3339();
+        let timestamp = Utc::now();
 
         let mut state = self.get_or_create_user_warning_state(user_id, guild_id);
-        state.warning_timestamps.push(timestamp.clone());
+        state.warning_timestamps.push(timestamp);
         state.warning_reasons.push(reason);
         state.mod_issuers.push(issuer_id);
         state.last_updated = timestamp;
@@ -410,17 +410,14 @@ impl Data {
         let mut unique_mods = std::collections::HashSet::new();
 
         // Calculate score for each warning based on recency
-        for (i, timestamp_str) in state.warning_timestamps.iter().enumerate() {
-            if let Ok(timestamp) = chrono::DateTime::parse_from_rfc3339(timestamp_str) {
-                let age_hours =
-                    (now - timestamp.with_timezone(&chrono::Utc)).num_seconds() as f64 / 3600.0;
-                let weight = (-DECAY_RATE * age_hours).exp(); // Exponential decay based on age
-                total_score += weight;
+        for (i, timestamp) in state.warning_timestamps.iter().enumerate() {
+            let age_hours = (now - timestamp.with_timezone(&Utc)).num_seconds() as f64 / 3600.0;
+            let weight = (-DECAY_RATE * age_hours).exp(); // Exponential decay based on age
+            total_score += weight;
 
-                // Track unique mods who issued warnings
-                if i < state.mod_issuers.len() {
-                    unique_mods.insert(state.mod_issuers[i]);
-                }
+            // Track unique mods who issued warnings
+            if i < state.mod_issuers.len() {
+                unique_mods.insert(state.mod_issuers[i]);
             }
         }
 
@@ -527,9 +524,6 @@ impl DataInner {
                     }
                     if enforcement.reversed_at.is_none() {
                         enforcement.reversed_at = None;
-                    }
-                    if enforcement.created_at.is_empty() {
-                        enforcement.created_at = chrono::Utc::now().to_rfc3339();
                     }
 
                     // Set state based on legacy executed field
@@ -777,10 +771,18 @@ mod tests {
             action: EnforcementAction::Ban {
                 duration: Some(604800),
             },
-            execute_at: "2023-01-02T00:00:00Z".to_string(),
-            reverse_at: Some("2023-01-09T00:00:00Z".to_string()),
+            execute_at: "2023-01-02T00:00:00Z"
+                .parse()
+                .expect("Failed to parse date"),
+            reverse_at: Some(
+                "2023-01-09T00:00:00Z"
+                    .parse()
+                    .expect("Failed to parse date"),
+            ),
             state: EnforcementState::Pending,
-            created_at: "2023-01-01T00:00:00Z".to_string(),
+            created_at: "2023-01-01T00:00:00Z"
+                .parse()
+                .expect("Failed to parse date"),
             executed_at: None,
             reversed_at: None,
             executed: false,

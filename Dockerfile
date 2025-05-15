@@ -16,7 +16,7 @@ USER c5run
 
 WORKDIR /app
 # Copy manifests
-COPY Cargo.toml Cargo.lock ./
+COPY entrypoint.sh Cargo.toml Cargo.lock ./
 
 # Cache dependencies
 RUN mkdir -p src && \
@@ -53,5 +53,7 @@ COPY --from=builder /app/target/release/dastardly-daemon /app/dastardly-daemon
 # Set environment variables
 ENV RUST_LOG=info
 
+# Entry point to set up the environment
+ENTRYPOINT [ "entrypoint.sh" ]
 # Run the binary
 CMD ["/app/dastardly-daemon"]

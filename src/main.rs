@@ -26,10 +26,17 @@ async fn async_main() -> Result<(), Error> {
     // Initialize logging
     logging::init(None)?;
     let log_sizes = logging::get_log_sizes("logs")?;
-    info!("Log sizes: {:?}", log_sizes);
+    info!("Log sizes: {log_sizes:?}");
 
     // Load environment variables
-    let token = env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN must be set");
+    let token = env::var("DISCORD_TOKEN").unwrap_or_else(|_| {
+        env::var("DISCORD_TOKEN_FILE")
+            .map(|file| {
+                let contents = std::fs::read_to_string(file).expect("Failed to read token file");
+                contents.trim().to_string()
+            })
+            .unwrap_or_else(|_| panic!("DISCORD_TOKEN or DISCORD_TOKEN_FILE not set"))
+    });
 
     // Load the bot's data from file
     info!("Loading bot data...");

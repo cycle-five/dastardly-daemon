@@ -4,14 +4,17 @@ services:
     image: cyclefive/dastardly-daemon:dev
     container_name: dastardly-daemon
     restart: unless-stopped
+    secrets:
+      - DISCORD_TOKEN
     environment:
-      - DISCORD_TOKEN=${DISCORD_TOKEN}
       - RUST_LOG=info,serenity=error
+      - DISCORD_TOKEN_FILE=/run/secrets/DISCORD_TOKEN
     volumes:
-      # - ./data:/app/data
-      # - ./logs:/app/logs
       - daemon_app_data:/app/data
       - daemon_app_logs:/app/logs
+secrets:
+  DISCORD_TOKEN:
+    file: ./discord_token.txt
 volumes:
   daemon_app_data:
     external: true
