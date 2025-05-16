@@ -4,12 +4,10 @@ use crate::{
         PendingEnforcement, UserWarningState, Warning, WarningContext,
     },
     enforcement::EnforcementCheckRequest,
-    status::{
-        format_active_channels, format_complete_status, format_enforcement_status,
-        format_problematic_users,
-    },
+    status::format_complete_status,
 };
 type Error = Box<dyn std::error::Error + Send + Sync>;
+use ::serenity::all::CacheHttp;
 use chrono::{DateTime, Duration, Utc};
 use poise::serenity_prelude as serenity;
 use poise::serenity_prelude::{Colour, CreateEmbed, CreateMessage, Mentionable, Timestamp, User};
@@ -130,12 +128,18 @@ fn get_enforcement_action(
                 let action_choice = rand::Rng::gen_range(&mut rng, 0..3); // 0-3 for four possible actions
 
                 match action_choice {
-                    0 => EnforcementAction::VoiceChannelHaunt {
-                        teleport_count: Some(5),       // More teleports for repeat offenders
-                        interval: Some(8),             // Quicker teleports
-                        return_to_origin: Some(false), // Don't return them to their original channel
-                        original_channel_id: None,
-                    },
+                    0 => {
+                        let teleport_count = Some(rand::Rng::gen_range(&mut rng, 1..=4));
+                        let interval = Some(rand::Rng::gen_range(&mut rng, 5..=10));
+                        let return_to_origin = Some(rand::Rng::gen_range(&mut rng, 0..=1) == 1);
+                        let original_channel_id = None; // No original channel for teleport
+                        EnforcementAction::VoiceChannelHaunt {
+                            teleport_count,   // More teleports for repeat offenders
+                            interval,         // Quicker teleports
+                            return_to_origin, // Don't return them to their original channel
+                            original_channel_id,
+                        }
+                    }
                     1 => EnforcementAction::VoiceDeafen {
                         duration: Some(900), // 15 minutes of deafening
                     },
@@ -1145,89 +1149,59 @@ pub async fn appease(
     ephemeral,
     required_permissions = "ADMINISTRATOR"
 )]
-pub async fn daemon_status(
-    ctx: Context<'_, Data, Error>,
-    #[description = "Show full details instead of summary"] full_details: Option<bool>,
-) -> Result<(), Error> {
+pub async fn daemon_status(ctx: Context<'_, Data, Error>) -> Result<(), Error> {
     ctx.defer().await?;
 
     // Update the status tracker with latest data
-    ctx.data().status.update_from_data(ctx.data());
+    ctx.data().status.write().await.update_from_data(ctx.data());
 
-    // Check if we should show full details or just summary
-    let show_full = full_details.unwrap_or(false);
+    let status = ctx.data().status.read().await.clone();
 
-    if show_full {
-        // Generate complete status report
-        let status_text = format_complete_status(&ctx.data().status, ctx.data());
+    let cache_http = (&ctx.data().get_cache(), ctx.http());
+    // Generate complete status report
+    let status_text = format_complete_status(&status, ctx.data(), &cache_http).await;
 
-        // Split into chunks if needed (Discord has a 2000 character limit)
-        if status_text.len() <= 1900 {
-            ctx.say(status_text).await?;
-        } else {
-            // Split into smaller chunks
-            let mut chunks = Vec::new();
-            let mut current_chunk = String::new();
+    // Split into chunks if needed (Discord has a 2000 character limit)
+    if status_text.len() <= 1900 {
+        ctx.say(status_text).await?;
+    } else {
+        // Split into smaller chunks
+        let mut chunks = Vec::new();
+        let mut current_chunk = String::new();
 
-            for line in status_text.lines() {
-                if current_chunk.len() + line.len() + 1 > 1900 {
-                    // This line would make the chunk too big, start a new one
-                    chunks.push(current_chunk);
-                    current_chunk = line.to_string();
-                } else {
-                    if !current_chunk.is_empty() {
-                        current_chunk.push('\n');
-                    }
-                    current_chunk.push_str(line);
-                }
-            }
-
-            // Add the last chunk if non-empty
-            if !current_chunk.is_empty() {
+        for line in status_text.lines() {
+            if current_chunk.len() + line.len() + 1 > 1900 {
+                // This line would make the chunk too big, start a new one
                 chunks.push(current_chunk);
-            }
-
-            // Send chunks
-            for (i, chunk) in chunks.iter().enumerate() {
-                let msg = if chunks.len() > 1 {
-                    format!(
-                        "**Status Report (Part {}/{})**\n{}",
-                        i + 1,
-                        chunks.len(),
-                        chunk
-                    )
-                } else {
-                    chunk.to_string()
-                };
-                ctx.say(msg).await?;
+                current_chunk = line.to_string();
+            } else {
+                if !current_chunk.is_empty() {
+                    current_chunk.push('\n');
+                }
+                current_chunk.push_str(line);
             }
         }
-    } else {
-        // For summary view, just show active voice channels with warnings/enforcements
-        let channels_text = format_active_channels(&ctx.data().status, ctx.data());
-        let users_text = format_problematic_users(&ctx.data().status, ctx.data());
-        let enforcements_text = format_enforcement_status(ctx.data());
 
-        // Combine them into a reasonable sized message
-        let summary = format!(
-            "# Daemon Status Summary\n\n{}",
-            if channels_text.as_str() == "No active voice channels"
-                && users_text.as_str()
-                    == "No users with active warnings or enforcements in voice channels"
-                && enforcements_text.as_str() == "No pending or active enforcements"
-            {
-                "**All clear!** The daemon is lying in wait with no current activity to report."
-                    .to_string()
-            } else {
+        // Add the last chunk if non-empty
+        if !current_chunk.is_empty() {
+            chunks.push(current_chunk);
+        }
+
+        // Send chunks
+        for (i, chunk) in chunks.iter().enumerate() {
+            let msg = if chunks.len() > 1 {
                 format!(
-                    "{channels_text}\n\n{users_text}\n\n{enforcements_text}\n\n*Use `/daemon_status true` for complete details.*",
+                    "**Status Report (Part {}/{})**\n{}",
+                    i + 1,
+                    chunks.len(),
+                    chunk
                 )
-            }
-        );
-
-        ctx.say(summary).await?;
+            } else {
+                chunk.to_string()
+            };
+            ctx.say(msg).await?;
+        }
     }
-
     Ok(())
 }
 

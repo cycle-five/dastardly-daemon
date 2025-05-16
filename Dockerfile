@@ -49,11 +49,12 @@ WORKDIR /app
 
 # Copy the binary from the builder stage
 COPY --from=builder /app/target/release/dastardly-daemon /app/dastardly-daemon
+COPY --from=builder /app/entrypoint.sh /app/entrypoint.sh
 
 # Set environment variables
 ENV RUST_LOG=info
 
 # Entry point to set up the environment
-ENTRYPOINT [ "entrypoint.sh" ]
+ENTRYPOINT [ "/app/entrypoint.sh" ]
 # Run the binary
 CMD ["/app/dastardly-daemon"]

@@ -1,4 +1,5 @@
 use crate::data::{Data, EnforcementAction, EnforcementState};
+use ::serenity::all::CacheHttp;
 use dashmap::DashMap;
 use poise::serenity_prelude as serenity;
 use serenity::builder::CreateEmbed;
@@ -105,14 +106,13 @@ impl BotStatus {
     }
 
     /// Update the status based on current bot data
-    pub fn update_from_data(&self, data: &Data) {
+    pub fn update_from_data(&mut self, data: &Data) {
         // Update the last status check time
         let now = SystemTime::now();
-        let mut status = self.clone();
-        status.last_status_check = now;
+        self.last_status_check = now;
 
         // First pass: Update user warning and enforcement status
-        for user_entry in &status.users_in_voice {
+        for user_entry in &self.users_in_voice {
             let key = *user_entry.key();
             let (user_id, guild_id) = key;
             // let guild_id = user_entry.value().guild_id;
@@ -137,7 +137,7 @@ impl BotStatus {
             let warning_score = data.calculate_warning_score(user_id.get(), guild_id.get());
 
             // Update user status
-            if let Some(mut user_status) = status.users_in_voice.get_mut(&key) {
+            if let Some(mut user_status) = self.users_in_voice.get_mut(&key) {
                 user_status.has_warnings = has_warnings;
                 user_status.has_enforcements = has_enforcements;
                 user_status.warning_score = warning_score;
@@ -146,7 +146,7 @@ impl BotStatus {
         }
 
         // Second pass: Update channel statistics based on user status
-        for channel_entry in &status.active_voice_channels {
+        for channel_entry in &self.active_voice_channels {
             let channel_id = *channel_entry.key();
             let guild_id = channel_entry.value().guild_id;
             let mut warned_count = 0;
@@ -155,7 +155,7 @@ impl BotStatus {
             // Count warned and enforced users in this channel
             for user_id in &channel_entry.value().users {
                 let key = (*user_id, guild_id);
-                if let Some(user_status) = status.users_in_voice.get(&key) {
+                if let Some(user_status) = self.users_in_voice.get(&key) {
                     if user_status.has_warnings {
                         warned_count += 1;
                     }
@@ -166,7 +166,7 @@ impl BotStatus {
             }
 
             // Update channel status
-            if let Some(mut channel_status) = status.active_voice_channels.get_mut(&channel_id) {
+            if let Some(mut channel_status) = self.active_voice_channels.get_mut(&channel_id) {
                 channel_status.warned_user_count = warned_count;
                 channel_status.enforced_user_count = enforced_count;
                 channel_status.last_updated = now;
@@ -457,9 +457,12 @@ pub fn format_active_channels(bot_status: &BotStatus, data: &Data) -> String {
 }
 
 /// Create a pretty-formatted representation of users with warnings or enforcements
-#[allow(deprecated)]
 #[must_use]
-pub fn format_problematic_users(bot_status: &BotStatus, data: &Data) -> String {
+pub async fn format_problematic_users(
+    bot_status: &BotStatus,
+    data: &Data,
+    cache_http: &impl CacheHttp,
+) -> String {
     let problematic_users = bot_status.get_problematic_users();
 
     if problematic_users.is_empty() {
@@ -487,13 +490,16 @@ pub fn format_problematic_users(bot_status: &BotStatus, data: &Data) -> String {
 
         // Get channel name if user is in one
         let channel_info = if let Some(channel_id) = user.current_channel {
-            let channel_name = data
-                .cache
-                .channel(channel_id)
-                .map(|ch| ch.name.clone())
-                .unwrap_or_else(|| format!("Channel {channel_id}"));
-
-            format!(" - in **{channel_name}**")
+            if let Ok(chanel) = channel_id.to_channel(cache_http).await {
+                if let Some(guild_chanel) = chanel.guild() {
+                    let name = guild_chanel.name;
+                    format!(" in **{name}**")
+                } else {
+                    String::new()
+                }
+            } else {
+                String::new()
+            }
         } else {
             String::new()
         };
@@ -661,7 +667,11 @@ fn format_enforcement_action(action: &EnforcementAction) -> String {
 
 /// Format a complete status report of the bot
 #[must_use]
-pub fn format_complete_status(bot_status: &BotStatus, data: &Data) -> String {
+pub async fn format_complete_status(
+    bot_status: &BotStatus,
+    data: &Data,
+    cache_http: &impl CacheHttp,
+) -> String {
     let (total_channels, total_users, issue_channels, issue_users) = bot_status.get_active_counts();
 
     let mut result = String::new();
@@ -717,7 +727,7 @@ pub fn format_complete_status(bot_status: &BotStatus, data: &Data) -> String {
     }
 
     if issue_users > 0 {
-        result.push_str(&format_problematic_users(bot_status, data));
+        result.push_str(&format_problematic_users(bot_status, data, cache_http).await);
         result.push('\n');
     }
 

@@ -12,7 +12,7 @@ use dashmap::DashMap;
 use poise::serenity_prelude as serenity;
 use serde::{Deserialize, Serialize};
 use serenity::prelude::TypeMapKey;
-use tokio::sync::mpsc::Sender;
+use tokio::sync::{RwLock, mpsc::Sender};
 
 // Constants for the scoring algorithm
 const DECAY_RATE: f64 = 0.05; // Higher values mean faster decay
@@ -437,6 +437,8 @@ pub struct DataInner {
     pub guild_configs: DashMap<serenity::GuildId, GuildConfig>,
     // Cache from the bot's context
     pub cache: Arc<serenity::Cache>,
+    // Http client for making requests
+    // pub http: Arc<serenity::Http>,
     // Map of warning_id -> warning
     pub warnings: DashMap<String, Warning>,
     // Map of enforcement_id -> pending enforcement (not yet executed)
@@ -450,7 +452,7 @@ pub struct DataInner {
     // Channel to send enforcement check requests
     pub enforcement_tx: Arc<Option<Sender<EnforcementCheckRequest>>>,
     // Status tracking for the bot's state and active voice channels
-    pub status: Arc<BotStatus>,
+    pub status: Arc<RwLock<BotStatus>>,
 }
 
 impl Default for DataInner {
@@ -472,7 +474,7 @@ impl DataInner {
             completed_enforcements: DashMap::new(),
             user_warning_states: DashMap::new(),
             enforcement_tx: Arc::new(None),
-            status: Arc::new(BotStatus::new()),
+            status: Arc::new(RwLock::new(BotStatus::new())),
         }
     }
 

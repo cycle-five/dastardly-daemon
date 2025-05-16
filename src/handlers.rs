@@ -25,13 +25,10 @@ impl EventHandler for Handler {
             );
         }
 
-        if let Some(data) = {
-            let data_read = ctx.data.read().await;
-            data_read.get::<Data>().cloned()
-        } {
+        if let Some(data) = ctx.data.write().await.get::<Data>() {
             // Initialize the status tracker with the current data
             info!("Initializing status tracker...");
-            data.status.initialize_from_cache(&data);
+            data.status.write().await.initialize_from_cache(data);
         } else {
             warn!("Could not get user data from context");
         }
@@ -44,8 +41,8 @@ impl EventHandler for Handler {
     async fn voice_state_update(&self, ctx: Context, old: Option<VoiceState>, new: VoiceState) {
         // Retrieve our data from the context
         let data_lock = {
-            let data_read = ctx.data.read().await;
-            data_read.get::<Data>().cloned()
+            let data_write = ctx.data.write().await;
+            data_write.get::<Data>().cloned()
         };
 
         if let (Some(data), Some(guild_id)) = (data_lock, new.guild_id) {
@@ -56,14 +53,21 @@ impl EventHandler for Handler {
                 // User joined a voice channel
                 (None, Some(new_channel)) => {
                     info!("User {user_id} joined voice channel {new_channel} in guild {guild_id}");
-                    data.status
-                        .user_joined_voice(guild_id, new_channel, user_id, &data);
+                    data.status.write().await.user_joined_voice(
+                        guild_id,
+                        new_channel,
+                        user_id,
+                        &data,
+                    );
                 }
 
                 // User left a voice channel
                 (Some(old_channel), None) => {
                     info!("User {user_id} left voice channel {old_channel} in guild {guild_id}",);
-                    data.status.user_left_voice(old_channel, user_id);
+                    data.status
+                        .write()
+                        .await
+                        .user_left_voice(old_channel, user_id);
                 }
 
                 // User moved between voice channels
@@ -71,7 +75,7 @@ impl EventHandler for Handler {
                     info!(
                         "User {user_id} moved from voice channel {old_channel} to {new_channel} in guild {guild_id}",
                     );
-                    data.status.user_moved_voice(
+                    data.status.write().await.user_moved_voice(
                         guild_id,
                         old_channel,
                         new_channel,
