@@ -25,9 +25,11 @@ impl EventHandler for Handler {
             );
         }
 
-        if let Some(data) = ctx.data.write().await.get::<Data>() {
-            // Initialize the status tracker with the current data
-            info!("Initializing status tracker...");
+        let arc_cache = ctx.cache.clone();
+        if let Some(data) = ctx.data.write().await.get_mut::<Data>() {
+            // Initialize the cache with the current guilds
+            info!("Initializing cache...");
+            data.cache = arc_cache.clone();
             data.status.write().await.initialize_from_cache(data);
         } else {
             warn!("Could not get user data from context");
