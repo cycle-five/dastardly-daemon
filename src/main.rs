@@ -1,18 +1,20 @@
 mod commands;
 mod daemon_response;
 mod data;
-mod enforcement;
+mod data_ext;
+mod enforcement_new;
 mod handlers;
 mod logging;
 mod status;
 
 use crate::data::Data;
+use crate::data_ext::DataEnforcementExt;
 use std::env;
 type Error = Box<dyn std::error::Error + Send + Sync>;
 
 use poise::serenity_prelude::{self as serenity};
 use serenity::GatewayIntents;
-use tracing::{error, info};
+use tracing::info;
 
 // Customize these constants for your bot
 pub const BOT_NAME: &str = "dastardly_daemon";
@@ -42,29 +44,34 @@ async fn async_main() -> Result<(), Error> {
     info!("Loading bot data...");
     let mut data = Data::load().await;
 
-    // Create enforcement channel first
-    info!("Creating enforcement channel...");
-    let enforcement_tx = enforcement::create_enforcement_channel();
-
-    // Set the enforcement sender in data BEFORE wrapping in Arc
-    data.set_enforcement_tx(enforcement_tx);
-
-    // Now wrap the data in Arc for thread-safe sharing
-    // let data = Arc::new(data);
+    // Initialize the new enforcement system
+    info!("Initializing new enforcement system...");
+    data.init_enforcement_service();
+    
+    // Create enforcement channel and start the task with the new system
+    info!("Creating enforcement channel and starting enforcement task...");
+    let http: std::sync::Arc<serenity::Http> = serenity::Http::new(&token).into();
+    data.import_and_start_enforcement(http.clone(), 60); // Check interval in seconds
+    
+    // // For backward compatibility, also initialize the old enforcement system
+    // let enforcement_tx = enforcement::create_enforcement_channel();
+    // data.set_enforcement_tx(enforcement_tx);
+    
+    // Keep a clone for the Poise framework below
     let data_cloned = data.clone();
-
-    // Start the enforcement task with the receiver
-    if let Some(rx) = enforcement::take_enforcement_receiver() {
-        info!("Starting enforcement task...");
-        enforcement::start_task_with_receiver(
-            serenity::Http::new(&token).into(),
-            data_cloned.clone(),
-            rx,
-            60, // Check interval in seconds
-        );
-    } else {
-        error!("Failed to get enforcement receiver");
-    }
+    
+    // // For backward compatibility, also start the old enforcement task
+    // if let Some(rx) = enforcement::take_enforcement_receiver() {
+    //     info!("Starting old enforcement task (for backward compatibility)...");
+    //     enforcement::start_task_with_receiver(
+    //         http,
+    //         data_cloned.clone(),
+    //         rx,
+    //         60, // Check interval in seconds
+    //     );
+    // } else {
+    //     error!("Failed to get old enforcement receiver");
+    // }
 
     // Configure the Poise framework
     let framework = poise::Framework::builder()

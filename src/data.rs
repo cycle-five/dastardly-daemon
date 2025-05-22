@@ -5,7 +5,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::enforcement::EnforcementCheckRequest;
+use crate::enforcement_new::EnforcementCheckRequest;
 use crate::status::BotStatus;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
@@ -262,6 +262,7 @@ impl std::fmt::Debug for Data {
             .field("warnings", &self.warnings)
             .field("pending_enforcements", &self.pending_enforcements)
             .field("enforcement_tx", &self.enforcement_tx)
+            .field("enforcement_service", &self.enforcement_service.is_some())
             .finish()
     }
 }
@@ -453,6 +454,8 @@ pub struct DataInner {
     pub enforcement_tx: Arc<Option<Sender<EnforcementCheckRequest>>>,
     // Status tracking for the bot's state and active voice channels
     pub status: Arc<RwLock<BotStatus>>,
+    // New enforcement system (will replace the above enforcement maps)
+    pub enforcement_service: Option<crate::enforcement_new::EnforcementService>,
 }
 
 impl Default for DataInner {
@@ -474,6 +477,7 @@ impl DataInner {
             completed_enforcements: DashMap::new(),
             user_warning_states: DashMap::new(),
             enforcement_tx: Arc::new(None),
+            enforcement_service: None,
             status: Arc::new(RwLock::new(BotStatus::new())),
         }
     }

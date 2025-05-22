@@ -276,7 +276,7 @@ async fn check_specific_enforcement(
 }
 
 /// Helper function to get guild and member information
-async fn get_guild_and_member(
+pub async fn get_guild_and_member(
     http: &Http,
     guild_id: GuildId,
     user_id: UserId,
@@ -733,7 +733,7 @@ async fn teleport_user(
 }
 
 /// Reverse an active enforcement action
-async fn reverse_enforcement(http: &Http, data: &Data, enforcement_id: &str) -> Result<(), Error> {
+pub async fn reverse_enforcement(http: &Http, data: &Data, enforcement_id: &str) -> Result<(), Error> {
     if let Some(mut active) = data.active_enforcements.get_mut(enforcement_id) {
         let guild_id = GuildId::new(active.guild_id);
         let user_id = UserId::new(active.user_id);
@@ -832,7 +832,7 @@ fn clear_pending_enforcement(data: &Data, user_id: u64, guild_id: u64) {
 }
 
 /// Execute a pending enforcement action
-async fn execute_enforcement(http: &Http, data: &Data, enforcement_id: &str) -> Result<(), Error> {
+pub async fn execute_enforcement(http: &Http, data: &Data, enforcement_id: &str) -> Result<(), Error> {
     // Try to get and remove the pending enforcement
     if let Some(mut pending) = data.pending_enforcements.get_mut(enforcement_id) {
         let guild_id = GuildId::new(pending.guild_id);

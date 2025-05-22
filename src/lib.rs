@@ -1,13 +1,15 @@
 pub mod commands;
 pub mod daemon_response;
 pub mod data;
-pub mod enforcement;
+pub mod data_ext;
+pub mod enforcement_new;
 pub mod handlers;
 pub mod logging;
 pub mod status;
 
 pub use data::{Data, DataInner};
 pub use data::{EnforcementAction, EnforcementState, PendingEnforcement};
+pub use data_ext::DataEnforcementExt;
 // pub use data::{EnforcementHandler, EnforcementTask};
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, Error>;

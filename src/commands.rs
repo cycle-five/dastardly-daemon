@@ -1,9 +1,9 @@
 use crate::{
     data::{
-        Data, EnforcementAction, EnforcementState, GuildConfig, NotificationMethod,
-        PendingEnforcement, UserWarningState, Warning, WarningContext,
+        Data, EnforcementAction, GuildConfig, NotificationMethod,
+        UserWarningState, Warning, WarningContext,
     },
-    enforcement::EnforcementCheckRequest,
+    data_ext::DataEnforcementExt,
     status::format_complete_status,
 };
 type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -1003,85 +1003,37 @@ pub async fn appease(
     let mut canceled = false;
     let mut canceled_enforcements = Vec::new();
 
-    // Find pending enforcements for this user in this guild - both from pending and active maps
-    let mut to_cancel = Vec::new();
+    // Use the new enforcement system to cancel enforcements
 
-    // Check pending enforcements
-    for entry in &ctx.data().pending_enforcements {
-        let pending = entry.value();
-        if pending.user_id == user_id
-            && pending.guild_id == guild_id.get()
-            && pending.state == crate::data::EnforcementState::Pending
-        {
-            if let Some(ref eid) = enforcement_id {
-                if pending.id == *eid {
-                    to_cancel.push((pending.id.clone(), true));
-                    canceled_enforcements.push(pending.clone());
-                    break;
+    if let Some(eid) = enforcement_id {
+        // Cancel specific enforcement by ID
+        if ctx.data().has_enforcement(&eid) {
+            if let Some(record) = ctx.data().get_enforcement(&eid) {
+                if record.user_id == user_id && record.guild_id == guild_id.get() {
+                    // Convert to old format for display
+                    canceled_enforcements.push(ctx.data().convert_to_old_enforcement(&record));
+                    canceled = true;
+                    
+                    // Process the cancellation
+                    let _ = ctx.data().process_enforcement(&ctx.serenity_context().http, &eid).await;
                 }
-            } else {
-                to_cancel.push((pending.id.clone(), true));
-                canceled_enforcements.push(pending.clone());
             }
         }
-    }
-
-    // Also check active enforcements
-    for entry in &ctx.data().active_enforcements {
-        let active = entry.value();
-        if active.user_id == user_id
-            && active.guild_id == guild_id.get()
-            && active.state == crate::data::EnforcementState::Active
-        {
-            if let Some(ref eid) = enforcement_id {
-                if active.id == *eid {
-                    to_cancel.push((active.id.clone(), false));
-                    canceled_enforcements.push(active.clone());
-                    break;
+    } else {
+        // Cancel all enforcements for this user
+        match ctx.data().cancel_user_enforcements(&ctx.serenity_context().http, user_id, guild_id.get()).await {
+            Ok(records) => {
+                if !records.is_empty() {
+                    canceled = true;
+                    // Convert to old format for display
+                    for record in records {
+                        canceled_enforcements.push(ctx.data().convert_to_old_enforcement(&record));
+                    }
                 }
-            } else {
-                to_cancel.push((active.id.clone(), false));
-                canceled_enforcements.push(active.clone());
             }
-        }
-    }
-
-    // Cancel the found enforcements
-    for (id, is_pending) in to_cancel {
-        if is_pending {
-            if let Some(mut pending) = ctx.data().pending_enforcements.get_mut(&id) {
-                pending.state = crate::data::EnforcementState::Cancelled;
-                pending.executed = true; // For backward compatibility
-
-                // Move to completed enforcements
-                let enforcement_data = pending.value().clone();
-                drop(pending);
-                ctx.data().pending_enforcements.remove(&id);
-                ctx.data()
-                    .completed_enforcements
-                    .insert(id.clone(), enforcement_data);
-
-                canceled = true;
-
-                // Notify the enforcement task
-                notify_enforcement_task_by_id(&ctx, id).await;
+            Err(e) => {
+                error!("Failed to cancel user enforcements: {e}");
             }
-        } else if let Some(mut active) = ctx.data().active_enforcements.get_mut(&id) {
-            active.state = crate::data::EnforcementState::Cancelled;
-            active.executed = true; // For backward compatibility
-
-            // Move to completed enforcements
-            let enforcement_data = active.value().clone();
-            drop(active);
-            ctx.data().active_enforcements.remove(&id);
-            ctx.data()
-                .completed_enforcements
-                .insert(id.clone(), enforcement_data);
-
-            canceled = true;
-
-            // Notify the enforcement task
-            notify_enforcement_task_by_id(&ctx, id).await;
         }
     }
 
@@ -1318,7 +1270,7 @@ async fn log_daemon_warning(
 }
 
 /// Calculates the execution time for an enforcement action
-fn calculate_execute_at(action: &EnforcementAction) -> chrono::DateTime<Utc> {
+pub fn calculate_execute_at(action: &EnforcementAction) -> chrono::DateTime<Utc> {
     match action {
         EnforcementAction::Ban { duration }
         | EnforcementAction::Mute { duration }
@@ -1336,7 +1288,7 @@ fn calculate_execute_at(action: &EnforcementAction) -> chrono::DateTime<Utc> {
     }
 }
 
-/// Creates and stores a pending enforcement
+/// Creates and stores a pending enforcement using the new system
 async fn create_pending_enforcement(
     ctx: &Context<'_, Data, Error>,
     warning_id: String,
@@ -1344,39 +1296,14 @@ async fn create_pending_enforcement(
     guild_id: u64,
     action: EnforcementAction,
 ) -> String {
-    let enforcement_id = Uuid::new_v4().to_string();
-    let execute_at = calculate_execute_at(&action);
-    let now = Utc::now();
-
-    let pending = PendingEnforcement {
-        id: enforcement_id.clone(),
-        warning_id,
-        user_id,
-        guild_id,
-        action,
-        execute_at,
-        reverse_at: None, // Will be set when executed if needed
-        state: EnforcementState::Pending,
-        created_at: now,
-        executed_at: None,
-        reversed_at: None,
-        executed: false, // For backward compatibility
-    };
-
-    ctx.data()
-        .pending_enforcements
-        .insert(enforcement_id.clone(), pending);
-
-    enforcement_id
+    let new_action = crate::enforcement_new::EnforcementAction::from_old(&action);
+    let record = ctx.data().create_enforcement(warning_id, user_id, guild_id, new_action);
+    record.id
 }
 
 /// Notifies the enforcement task about a user
 async fn notify_enforcement_task(ctx: &Context<'_, Data, Error>, user_id: u64, guild_id: u64) {
-    if let Some(tx) = &*ctx.data().enforcement_tx {
-        let _ = tx
-            .send(EnforcementCheckRequest::CheckUser { user_id, guild_id })
-            .await;
-    }
+    let _ = ctx.data().notify_enforcement_about_user(user_id, guild_id).await;
 }
 
 /// Saves data with appropriate error handling
@@ -1421,11 +1348,7 @@ async fn create_and_notify_enforcement(
 
 /// Notifies the enforcement task about a specific enforcement
 async fn notify_enforcement_task_by_id(ctx: &Context<'_, Data, Error>, enforcement_id: String) {
-    if let Some(tx) = &*ctx.data().enforcement_tx {
-        let _ = tx
-            .send(EnforcementCheckRequest::CheckEnforcement { enforcement_id })
-            .await;
-    }
+    let _ = ctx.data().process_enforcement(&ctx.serenity_context().http, &enforcement_id).await;
 }
 
 #[cfg(test)]
