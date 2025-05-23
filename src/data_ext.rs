@@ -68,11 +68,6 @@ pub trait DataEnforcementExt {
         id: &str,
     ) -> Option<EnforcementRecord>;
     
-    /// Convert old PendingEnforcement to new EnforcementRecord
-    fn convert_to_new_enforcement(&self, old: &PendingEnforcement) -> EnforcementRecord;
-    
-    /// Convert new EnforcementRecord to old PendingEnforcement
-    fn convert_to_old_enforcement(&self, new: &EnforcementRecord) -> PendingEnforcement;
     
     /// Clear pending enforcement from user warning state
     fn clear_pending_enforcement(&self, user_id: u64, guild_id: u64);
@@ -99,19 +94,16 @@ impl DataEnforcementExt for Data {
     }
     
     fn import_enforcements(&self) {
-        if let Some(ref mut service) = self.enforcement_service.clone() {
-            service.store.import_from_old(self);
-            info!("Imported enforcements to new enforcement system");
+        if let Some(_service) = self.enforcement_service.as_ref() {
+            // Old enforcement import is no longer needed since we've fully transitioned
+            info!("Enforcement service initialized, old enforcements are deprecated");
         }
     }
     
     fn export_enforcements(&self) {
-        // We need to clone the service first to avoid borrowing self as both mutable and immutable
-        let service_clone = self.enforcement_service.as_ref().map(|service| service.clone());
-        
-        if let Some(service) = service_clone {
-            service.store.export_to_old(self);
-            info!("Exported enforcements to old enforcement system");
+        if let Some(_service) = self.enforcement_service.as_ref() {
+            // Old enforcement export is no longer needed since we've fully transitioned
+            info!("Enforcement service active, old enforcement system is deprecated");
         }
     }
     
@@ -125,19 +117,6 @@ impl DataEnforcementExt for Data {
         if let Some(ref service) = self.enforcement_service {
             let record = service.create_enforcement(warning_id, user_id, guild_id, action);
             
-            // For backward compatibility, also create in old system
-            let old_record = self.convert_to_old_enforcement(&record);
-            match old_record.state {
-                EnforcementState::Pending => {
-                    self.pending_enforcements.insert(record.id.clone(), old_record);
-                }
-                EnforcementState::Active => {
-                    self.active_enforcements.insert(record.id.clone(), old_record);
-                }
-                _ => {
-                    self.completed_enforcements.insert(record.id.clone(), old_record);
-                }
-            }
             
             record
         } else {
@@ -208,13 +187,6 @@ impl DataEnforcementExt for Data {
         }
     }
     
-    fn convert_to_new_enforcement(&self, old: &PendingEnforcement) -> EnforcementRecord {
-        EnforcementRecord::from_old(old)
-    }
-    
-    fn convert_to_old_enforcement(&self, new: &EnforcementRecord) -> PendingEnforcement {
-        new.to_old()
-    }
     
     fn clear_pending_enforcement(&self, user_id: u64, guild_id: u64) {
         let key = format!("{user_id}:{guild_id}");

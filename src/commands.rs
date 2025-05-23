@@ -1,10 +1,11 @@
 use crate::{
     data::{
-        Data, EnforcementAction, GuildConfig, NotificationMethod,
+        Data, GuildConfig, NotificationMethod,
         UserWarningState, Warning, WarningContext,
-    },
-    data_ext::DataEnforcementExt,
-    status::format_complete_status,
+    }, data_ext::DataEnforcementExt, enforcement_new::ActionParams, status::format_complete_status
+};
+use crate::enforcement_new::{
+    EnforcementAction
 };
 type Error = Box<dyn std::error::Error + Send + Sync>;
 use ::serenity::all::CacheHttp;
@@ -53,13 +54,13 @@ fn get_enforcement_action(
         // Check if the pending enforcement is relevant to the current infraction type
         let is_matching_type = matches!(
             (infraction_type, existing_enforcement),
-            ("voice", EnforcementAction::VoiceMute { .. })
-                | ("voice", EnforcementAction::VoiceDeafen { .. })
-                | ("voice", EnforcementAction::VoiceDisconnect { .. })
-                | ("voice", EnforcementAction::VoiceChannelHaunt { .. })
-                | ("text", EnforcementAction::Mute { .. })
-                | ("server", EnforcementAction::Ban { .. })
-                | ("server", EnforcementAction::Kick { .. })
+            ("voice", EnforcementAction::VoiceMute(..))
+                | ("voice", EnforcementAction::VoiceDeafen(..))
+                | ("voice", EnforcementAction::VoiceDisconnect(..))
+                | ("voice", EnforcementAction::VoiceChannelHaunt(..))
+                | ("text", EnforcementAction::Mute(..))
+                | ("server", EnforcementAction::Ban(..))
+                | ("server", EnforcementAction::Kick(..))
         );
 
         // Check if the pending enforcement is recent enough (within 14 days)
@@ -92,20 +93,16 @@ fn get_enforcement_action(
         let enforcement =
             match infraction_type {
                 "voice" => guild_config.default_enforcement.clone().unwrap_or(
-                    EnforcementAction::VoiceMute {
-                        duration: Some(300),
-                    },
+                    EnforcementAction::voice_mute(300),
                 ),
                 "server" => guild_config
                     .default_enforcement
                     .clone()
-                    .unwrap_or(EnforcementAction::Kick { delay: Some(0) }),
+                    .unwrap_or(EnforcementAction::kick(0)),
                 _ => guild_config // text
                     .default_enforcement
                     .clone()
-                    .unwrap_or(EnforcementAction::Mute {
-                        duration: Some(300),
-                    }),
+                    .unwrap_or(EnforcementAction::mute(300)),
             };
 
         // Store the pending enforcement in the user state
@@ -133,38 +130,28 @@ fn get_enforcement_action(
                         let interval = Some(rand::Rng::gen_range(&mut rng, 5..=10));
                         let return_to_origin = Some(rand::Rng::gen_range(&mut rng, 0..=1) == 1);
                         let original_channel_id = None; // No original channel for teleport
-                        EnforcementAction::VoiceChannelHaunt {
+                        EnforcementAction::voice_channel_haunt(
                             teleport_count,   // More teleports for repeat offenders
                             interval,         // Quicker teleports
                             return_to_origin, // Don't return them to their original channel
                             original_channel_id,
-                        }
+                        )
                     }
-                    1 => EnforcementAction::VoiceDeafen {
-                        duration: Some(900), // 15 minutes of deafening
-                    },
-                    2 => EnforcementAction::VoiceDisconnect {
-                        delay: Some(0), // Immediate disconnection
-                    },
-                    _ => EnforcementAction::VoiceMute {
-                        duration: Some(1200), // 20 minutes of voice mute
-                    },
+                    1 => EnforcementAction::voice_deafen(900), // 15 minutes of deafening
+                    2 => EnforcementAction::voice_disconnect(0), // Immediate disconnection
+                    _ => EnforcementAction::voice_mute(1200), // 20 minutes of voice mute
                 }
             }
             "server" => {
                 guild_config
                     .default_enforcement
                     .clone()
-                    .unwrap_or(EnforcementAction::Mute {
-                        duration: Some(3600),
-                    })
+                    .unwrap_or(EnforcementAction::mute(3600))
             }
             _ => guild_config // text
                 .default_enforcement
                 .clone()
-                .unwrap_or(EnforcementAction::Mute {
-                    duration: Some(600), // Longer duration for repeat offenders
-                }),
+                .unwrap_or(EnforcementAction::mute(600)), // Longer duration for repeat offenders
         };
 
         // Store the new enforcement in the user state
@@ -483,13 +470,13 @@ pub async fn warn(
     // Determine enforcement action
     let duration = duration_minutes.map(|d| d * 60);
     let enforcement = match action.as_deref() {
-        Some("mute" | "Mute") => Some(EnforcementAction::Mute { duration }),
-        Some("ban" | "Ban") => Some(EnforcementAction::Ban { duration }),
-        Some("kick" | "Kick") => Some(EnforcementAction::Kick { delay: duration }),
-        Some("voicemute" | "VoiceMute") => Some(EnforcementAction::VoiceMute { duration }),
-        Some("voicedeafen" | "VoiceDeafen") => Some(EnforcementAction::VoiceDeafen { duration }),
+        Some("mute" | "Mute") => Some(EnforcementAction::mute(duration)),
+        Some("ban" | "Ban") => Some(EnforcementAction::ban(duration)),
+        Some("kick" | "Kick") => Some(EnforcementAction::kick(duration)),
+        Some("voicemute" | "VoiceMute") => Some(EnforcementAction::voice_mute(duration)),
+        Some("voicedeafen" | "VoiceDeafen") => Some(EnforcementAction::voice_deafen(duration)),
         Some("voicedisconnect" | "VoiceDisconnect") => {
-            Some(EnforcementAction::VoiceDisconnect { delay: duration })
+            Some(EnforcementAction::voice_disconnect(duration))
         }
         _ => guild_config.default_enforcement,
     };
@@ -837,10 +824,10 @@ pub async fn judgment_history(
             if let Some(action) = &warning.enforcement {
                 if matches!(
                     action,
-                    EnforcementAction::VoiceMute { .. }
-                        | EnforcementAction::VoiceDeafen { .. }
-                        | EnforcementAction::VoiceDisconnect { .. }
-                        | EnforcementAction::VoiceChannelHaunt { .. }
+                    EnforcementAction::VoiceMute(..)
+                        | EnforcementAction::VoiceDeafen(..)
+                        | EnforcementAction::VoiceDisconnect(..)
+                        | EnforcementAction::VoiceChannelHaunt(..)
                 ) {
                     voice_warnings += 1;
                 }
@@ -905,33 +892,33 @@ pub async fn judgment_history(
     // Add pending enforcement if any
     if let Some(action) = &state.pending_enforcement {
         let action_desc = match action {
-            EnforcementAction::VoiceMute { duration } => {
+            EnforcementAction::VoiceMute(params) => {
                 format!(
                     "voice shall be silenced for {} seconds",
-                    duration.unwrap_or(300)
+                    params.duration_or_default()
                 )
             }
-            EnforcementAction::VoiceDeafen { duration } => {
+            EnforcementAction::VoiceDeafen(params) => {
                 format!(
                     "ears shall be cursed for {} seconds",
-                    duration.unwrap_or(300)
+                    params.duration_or_default()
                 )
             }
-            EnforcementAction::VoiceDisconnect { .. } => {
+            EnforcementAction::VoiceDisconnect(..) => {
                 "mortal shall be banished from the voice realm".to_string()
             }
-            EnforcementAction::Mute { duration } => {
+            EnforcementAction::Mute(params) => {
                 format!(
                     "text shall be silenced for {} seconds",
-                    duration.unwrap_or(300)
+                    params.duration_or_default()
                 )
             }
-            EnforcementAction::Ban { duration } => {
-                format!("banishment for {} seconds", duration.unwrap_or(86400))
+            EnforcementAction::Ban(params) => {
+                format!("banishment for {} seconds", params.duration_or_default())
             }
-            EnforcementAction::Kick { .. } => "exile from the realm".to_string(),
+            EnforcementAction::Kick(..) => "exile from the realm".to_string(),
             EnforcementAction::None => "no action".to_string(),
-            EnforcementAction::VoiceChannelHaunt { .. } => {
+            EnforcementAction::VoiceChannelHaunt(..) => {
                 "haunting through the voice channels".to_string()
             }
         };
@@ -1011,7 +998,7 @@ pub async fn appease(
             if let Some(record) = ctx.data().get_enforcement(&eid) {
                 if record.user_id == user_id && record.guild_id == guild_id.get() {
                     // Convert to old format for display
-                    canceled_enforcements.push(ctx.data().convert_to_old_enforcement(&record));
+                    canceled_enforcements.push(record.clone());
                     canceled = true;
                     
                     // Process the cancellation
@@ -1027,7 +1014,7 @@ pub async fn appease(
                     canceled = true;
                     // Convert to old format for display
                     for record in records {
-                        canceled_enforcements.push(ctx.data().convert_to_old_enforcement(&record));
+                        canceled_enforcements.push(record);
                     }
                 }
             }
@@ -1062,10 +1049,10 @@ pub async fn appease(
         let has_voice_enforcement = canceled_enforcements.iter().any(|enforcement| {
             matches!(
                 enforcement.action,
-                EnforcementAction::VoiceMute { .. }
-                    | EnforcementAction::VoiceDeafen { .. }
-                    | EnforcementAction::VoiceDisconnect { .. }
-                    | EnforcementAction::VoiceChannelHaunt { .. }
+                EnforcementAction::VoiceMute(..)
+                    | EnforcementAction::VoiceDeafen(..)
+                    | EnforcementAction::VoiceDisconnect(..)
+                    | EnforcementAction::VoiceChannelHaunt(..)
             )
         });
 
@@ -1207,32 +1194,27 @@ async fn log_daemon_warning(
         if state.warning_timestamps.len() == 1 {
             // This is the first warning, indicate what will happen
             let action_desc = match action {
-                EnforcementAction::VoiceMute { duration } => {
-                    format!("Voice mute for {} seconds", duration.unwrap_or(300))
+                EnforcementAction::VoiceMute(params) => {
+                    format!("Voice mute for {} seconds", params.duration_or_default())
                 }
-                EnforcementAction::VoiceDeafen { duration } => {
-                    format!("Voice deafen for {} seconds", duration.unwrap_or(300))
+                EnforcementAction::VoiceDeafen(params) => {
+                    format!("Voice deafen for {} seconds", params.duration_or_default())
                 }
-                EnforcementAction::VoiceDisconnect { .. } => "Voice disconnect".to_string(),
-                EnforcementAction::Mute { duration } => {
-                    format!("Server mute for {} seconds", duration.unwrap_or(300))
+                EnforcementAction::VoiceDisconnect(..) => "Voice disconnect".to_string(),
+                EnforcementAction::Mute(params) => {
+                    format!("Server mute for {} seconds", params.duration_or_default())
                 }
-                EnforcementAction::Ban { duration } => {
-                    format!("Ban for {} seconds", duration.unwrap_or(86400))
+                EnforcementAction::Ban(params) => {
+                    format!("Ban for {} seconds", params.duration_or_default())
                 }
-                EnforcementAction::Kick { .. } => "Kick".to_string(),
+                EnforcementAction::Kick(..) => "Kick".to_string(),
                 EnforcementAction::None => "No action".to_string(),
-                EnforcementAction::VoiceChannelHaunt {
-                    teleport_count,
-                    interval,
-                    return_to_origin,
-                    ..
-                } => {
+                EnforcementAction::VoiceChannelHaunt(params) => {
                     format!(
                         "Voice channel haunting: {} teleports over {} seconds{}",
-                        teleport_count.unwrap_or(3),
-                        interval.unwrap_or(10),
-                        if return_to_origin.unwrap_or(true) {
+                        params.teleport_count_or_default(),
+                        params.interval_or_default(),
+                        if params.return_to_origin_or_default() {
                             " (with return)"
                         } else {
                             " (no return)"
@@ -1272,17 +1254,17 @@ async fn log_daemon_warning(
 /// Calculates the execution time for an enforcement action
 pub fn calculate_execute_at(action: &EnforcementAction) -> chrono::DateTime<Utc> {
     match action {
-        EnforcementAction::Ban { duration }
-        | EnforcementAction::Mute { duration }
-        | EnforcementAction::VoiceMute { duration }
-        | EnforcementAction::VoiceDeafen { duration } => {
-            Utc::now() + Duration::seconds(duration.unwrap_or(0) as i64)
+        EnforcementAction::Ban(params)
+        | EnforcementAction::Mute(params)
+        | EnforcementAction::VoiceMute(params)
+        | EnforcementAction::VoiceDeafen(params) => {
+            Utc::now() + Duration::seconds(params.duration_or_default() as i64)
         }
-        EnforcementAction::Kick { delay } | EnforcementAction::VoiceDisconnect { delay } => {
-            Utc::now() + Duration::seconds(delay.unwrap_or(0) as i64)
+        EnforcementAction::Kick(params) | EnforcementAction::VoiceDisconnect(params) => {
+            Utc::now() + Duration::seconds(params.duration_or_default() as i64)
         }
-        EnforcementAction::VoiceChannelHaunt { interval, .. } => {
-            Utc::now() + Duration::seconds(interval.unwrap_or(0) as i64)
+        EnforcementAction::VoiceChannelHaunt(params) => {
+            Utc::now() + Duration::seconds(params.interval_or_default() as i64)
         }
         EnforcementAction::None => Utc::now(),
     }
@@ -1296,8 +1278,8 @@ async fn create_pending_enforcement(
     guild_id: u64,
     action: EnforcementAction,
 ) -> String {
-    let new_action = crate::enforcement_new::EnforcementAction::from_old(&action);
-    let record = ctx.data().create_enforcement(warning_id, user_id, guild_id, new_action);
+    //let new_action = crate::enforcement_new::EnforcementAction::from_old(&action);
+    let record = ctx.data().create_enforcement(warning_id, user_id, guild_id, action);
     record.id
 }
 
@@ -1318,14 +1300,14 @@ async fn save_data(ctx: &Context<'_, Data, Error>, error_context: &str) -> Resul
 /// Checks if an enforcement action should be applied immediately
 fn is_immediate_action(action: &EnforcementAction) -> bool {
     match action {
-        EnforcementAction::Kick { delay } | EnforcementAction::VoiceDisconnect { delay } => {
-            delay.is_none() || delay.is_some_and(|d| d == 0)
+        EnforcementAction::Kick(params) | EnforcementAction::VoiceDisconnect(params) => {
+            !params.has_duration() || params.duration_or_default() == 0
         }
-        EnforcementAction::Mute { .. }
-        | EnforcementAction::VoiceMute { .. }
-        | EnforcementAction::VoiceDeafen { .. }
-        | EnforcementAction::Ban { .. }
-        | EnforcementAction::VoiceChannelHaunt { .. } => true,
+        EnforcementAction::Mute(..)
+        | EnforcementAction::VoiceMute(..)
+        | EnforcementAction::VoiceDeafen(..)
+        | EnforcementAction::Ban(..)
+        | EnforcementAction::VoiceChannelHaunt(..) => true,
         EnforcementAction::None => false,
     }
 }

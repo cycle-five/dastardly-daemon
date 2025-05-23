@@ -10,8 +10,7 @@ use poise::serenity_prelude::{GuildId, Http, UserId};
 use std::sync::Arc;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::time::Duration;
-use tracing::{error, info, warn};
-use uuid::Uuid;
+use tracing::{error, info};
 
 /// Service for enforcement operations
 #[derive(Clone)]
@@ -378,8 +377,8 @@ impl EnforcementService {
         http: Arc<Http>,
         check_interval_seconds: u64,
     ) {
-        // Import records from old system
-        self.store.import_from_old(data);
+        // // Import records from old system
+        // self.store.import_from_old(data);
         
         // Create enforcement channel
         let tx = Self::create_enforcement_channel();

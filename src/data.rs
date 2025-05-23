@@ -6,6 +6,7 @@ use std::{
 };
 
 use crate::enforcement_new::EnforcementCheckRequest;
+use crate::enforcement_new::EnforcementAction;
 use crate::status::BotStatus;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
@@ -71,42 +72,6 @@ pub enum NotificationMethod {
     PublicWithMention,
 }
 
-/// Enforcement actions that can be taken as part of a warning
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
-pub enum EnforcementAction {
-    #[default]
-    None,
-    Mute {
-        duration: Option<u64>,
-    },
-    Ban {
-        duration: Option<u64>,
-    },
-    Kick {
-        delay: Option<u64>,
-    },
-    // Voice channel specific actions
-    VoiceMute {
-        duration: Option<u64>,
-    },
-    VoiceDeafen {
-        duration: Option<u64>,
-    },
-    VoiceDisconnect {
-        delay: Option<u64>,
-    },
-    // Daemon specialized punishments
-    VoiceChannelHaunt {
-        /// Number of times to teleport the user between channels
-        teleport_count: Option<u64>,
-        /// Seconds between each teleport
-        interval: Option<u64>,
-        /// Whether to eventually return the user to their original channel
-        return_to_origin: Option<bool>,
-        /// Original voice channel ID to potentially return to
-        original_channel_id: Option<u64>,
-    },
-}
 
 /// Represents a warning issued to a user
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -702,9 +667,7 @@ mod tests {
             guild_id: 12345,
             music_channel_id: Some(67890),
             default_notification_method: NotificationMethod::DirectMessage,
-            default_enforcement: Some(EnforcementAction::Mute {
-                duration: Some(3600),
-            }),
+            default_enforcement: Some(EnforcementAction::mute(3600)),
             enforcement_log_channel_id: Some(54321),
             ..Default::default()
         };
@@ -725,8 +688,8 @@ mod tests {
             deserialized.default_notification_method,
             NotificationMethod::DirectMessage
         ));
-        if let Some(EnforcementAction::Mute { duration }) = deserialized.default_enforcement {
-            assert_eq!(duration, Some(3600));
+        if let Some(EnforcementAction::Mute(params)) = deserialized.default_enforcement {
+            assert_eq!(params.duration, Some(3600));
         } else {
             panic!("Expected Mute enforcement");
         }
@@ -742,7 +705,7 @@ mod tests {
             reason: "Test warning".to_string(),
             timestamp: "2023-01-01T00:00:00Z".parse().unwrap(),
             notification_method: NotificationMethod::PublicWithMention,
-            enforcement: Some(EnforcementAction::Kick { delay: Some(86400) }),
+            enforcement: Some(EnforcementAction::kick(86400)),
         };
 
         let serialized = serde_yaml::to_string(&warning).expect("Failed to serialize");
@@ -760,8 +723,8 @@ mod tests {
             deserialized.notification_method,
             NotificationMethod::PublicWithMention
         ));
-        if let Some(EnforcementAction::Kick { delay }) = deserialized.enforcement {
-            assert_eq!(delay, Some(86400));
+        if let Some(EnforcementAction::Kick(params)) = deserialized.enforcement {
+            assert_eq!(params.duration, Some(86400));
         } else {
             panic!("Expected Kick enforcement");
         }
@@ -774,9 +737,7 @@ mod tests {
             warning_id: "warn-id".to_string(),
             user_id: 12345,
             guild_id: 11111,
-            action: EnforcementAction::Ban {
-                duration: Some(604800),
-            },
+            action: EnforcementAction::ban(604800),
             execute_at: "2023-01-02T00:00:00Z"
                 .parse()
                 .expect("Failed to parse date"),
@@ -805,8 +766,8 @@ mod tests {
         assert_eq!(deserialized.id, "enf-id");
         assert_eq!(deserialized.warning_id, "warn-id");
         assert!(!deserialized.executed);
-        if let EnforcementAction::Ban { duration } = deserialized.action {
-            assert_eq!(duration, Some(604800));
+        if let EnforcementAction::Ban(params) = deserialized.action {
+            assert_eq!(params.duration, Some(604800));
         } else {
             panic!("Expected Ban enforcement");
         }

@@ -254,53 +254,6 @@ impl EnforcementAction {
         ))
     }
     
-    /// Convert from old EnforcementAction format (for backward compatibility)
-    #[allow(clippy::unnested_or_patterns)]
-    pub fn from_old(action: &crate::data::EnforcementAction) -> Self {
-        use crate::data::EnforcementAction as OldAction;
-        
-        match action {
-            OldAction::None => Self::None,
-            OldAction::Mute { duration } => Self::Mute(ActionParams::new(*duration)),
-            OldAction::Ban { duration } => Self::Ban(ActionParams::new(*duration)),
-            OldAction::Kick { delay } => Self::Kick(ActionParams::new(*delay)),
-            OldAction::VoiceMute { duration } => Self::VoiceMute(ActionParams::new(*duration)),
-            OldAction::VoiceDeafen { duration } => Self::VoiceDeafen(ActionParams::new(*duration)),
-            OldAction::VoiceDisconnect { delay } => Self::VoiceDisconnect(ActionParams::new(*delay)),
-            OldAction::VoiceChannelHaunt { 
-                teleport_count, 
-                interval, 
-                return_to_origin, 
-                original_channel_id 
-            } => Self::VoiceChannelHaunt(HauntParams::new(
-                *teleport_count,
-                *interval,
-                *return_to_origin,
-                *original_channel_id,
-            )),
-        }
-    }
-    
-    /// Convert to old EnforcementAction format (for backward compatibility)
-    pub fn to_old(&self) -> crate::data::EnforcementAction {
-        use crate::data::EnforcementAction as OldAction;
-        
-        match self {
-            Self::None => OldAction::None,
-            Self::Mute(params) => OldAction::Mute { duration: params.duration },
-            Self::Ban(params) => OldAction::Ban { duration: params.duration },
-            Self::Kick(params) => OldAction::Kick { delay: params.duration },
-            Self::VoiceMute(params) => OldAction::VoiceMute { duration: params.duration },
-            Self::VoiceDeafen(params) => OldAction::VoiceDeafen { duration: params.duration },
-            Self::VoiceDisconnect(params) => OldAction::VoiceDisconnect { delay: params.duration },
-            Self::VoiceChannelHaunt(params) => OldAction::VoiceChannelHaunt { 
-                teleport_count: params.teleport_count, 
-                interval: params.interval, 
-                return_to_origin: params.return_to_origin, 
-                original_channel_id: params.original_channel_id,
-            },
-        }
-    }
 }
 
 #[cfg(test)]

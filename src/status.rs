@@ -1,4 +1,5 @@
-use crate::data::{Data, EnforcementAction, EnforcementState};
+use crate::data::{Data, EnforcementState};
+use crate::enforcement_new::EnforcementAction;
 use ::serenity::all::CacheHttp;
 use dashmap::DashMap;
 use poise::serenity_prelude as serenity;
@@ -610,16 +611,17 @@ impl Display for EnforcementAction {
 /// Format an enforcement action in a human-readable way
 fn format_enforcement_action(action: &EnforcementAction) -> String {
     match action {
-        EnforcementAction::Mute { duration } => {
-            format!("Muted for {} seconds", duration.unwrap_or(0))
+        EnforcementAction::Mute(params) => {
+            format!("Muted for {} seconds", params.duration_or_default())
         }
-        EnforcementAction::Ban { duration } => {
-            format!("Banned for {} seconds", duration.unwrap_or(0))
+        EnforcementAction::Ban(params) => {
+            format!("Banned for {} seconds", params.duration_or_default())
         }
-        EnforcementAction::Kick { delay } => {
-            if let Some(d) = delay {
-                if *d > 0 {
-                    format!("Will be kicked in {d} seconds")
+        EnforcementAction::Kick(params) => {
+            if params.has_duration() {
+                let delay = params.duration_or_default();
+                if delay > 0 {
+                    format!("Will be kicked in {delay} seconds")
                 } else {
                     "Kicked".to_string()
                 }
@@ -627,16 +629,17 @@ fn format_enforcement_action(action: &EnforcementAction) -> String {
                 "Kicked".to_string()
             }
         }
-        EnforcementAction::VoiceMute { duration } => {
-            format!("Voice muted for {} seconds", duration.unwrap_or(0))
+        EnforcementAction::VoiceMute(params) => {
+            format!("Voice muted for {} seconds", params.duration_or_default())
         }
-        EnforcementAction::VoiceDeafen { duration } => {
-            format!("Voice deafened for {} seconds", duration.unwrap_or(0))
+        EnforcementAction::VoiceDeafen(params) => {
+            format!("Voice deafened for {} seconds", params.duration_or_default())
         }
-        EnforcementAction::VoiceDisconnect { delay } => {
-            if let Some(d) = delay {
-                if *d > 0 {
-                    format!("Will be disconnected from voice in {d} seconds")
+        EnforcementAction::VoiceDisconnect(params) => {
+            if params.has_duration() {
+                let delay = params.duration_or_default();
+                if delay > 0 {
+                    format!("Will be disconnected from voice in {delay} seconds")
                 } else {
                     "Disconnected from voice".to_string()
                 }
@@ -644,17 +647,12 @@ fn format_enforcement_action(action: &EnforcementAction) -> String {
                 "Disconnected from voice".to_string()
             }
         }
-        EnforcementAction::VoiceChannelHaunt {
-            teleport_count,
-            interval,
-            return_to_origin,
-            ..
-        } => {
+        EnforcementAction::VoiceChannelHaunt(params) => {
             format!(
                 "Voice haunting: {} teleports every {} seconds{}",
-                teleport_count.unwrap_or(3),
-                interval.unwrap_or(10),
-                if return_to_origin.unwrap_or(true) {
+                params.teleport_count_or_default(),
+                params.interval_or_default(),
+                if params.return_to_origin_or_default() {
                     " (will return to origin)"
                 } else {
                     ""

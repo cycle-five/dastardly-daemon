@@ -31,39 +31,39 @@ pub enum EnforcementError {
     #[error("User not in voice channel")]
     NotInVoiceChannel,
     
-    /// User not in the specified guild
-    #[error("User not in guild: {0}")]
-    UserNotInGuild(u64),
+    // /// User not in the specified guild
+    // #[error("User not in guild: {0}")]
+    // UserNotInGuild(u64),
     
     /// No voice channels in guild
     #[error("No voice channels in guild: {0}")]
     NoVoiceChannels(u64),
     
-    /// Permission error
-    #[error("Permission error: {0}")]
-    PermissionDenied(String),
+    // /// Permission error
+    // #[error("Permission error: {0}")]
+    // PermissionDenied(String),
     
-    /// Error saving data
-    #[error("Error saving data: {0}")]
-    DataSaveError(String),
+    // /// Error saving data
+    // #[error("Error saving data: {0}")]
+    // DataSaveError(String),
     
     /// Generic error
     #[error("Enforcement error: {0}")]
     Other(String),
 }
 
-impl EnforcementError {
+// impl EnforcementError {
    
-    /// Create a validation error
-    pub fn validation(message: impl Into<String>) -> Self {
-        Self::ValidationFailed(message.into())
-    }
+//     /// Create a validation error
+//     pub fn validation(message: impl Into<String>) -> Self {
+//         Self::ValidationFailed(message.into())
+//     }
     
-    /// Create a guild or member not found error
-    pub fn guild_or_member(message: impl Into<String>) -> Self {
-        Self::GuildOrMemberNotFound(message.into())
-    }
-}
+//     /// Create a guild or member not found error
+//     pub fn guild_or_member(message: impl Into<String>) -> Self {
+//         Self::GuildOrMemberNotFound(message.into())
+//     }
+// }
 
 /// Convert a string into an EnforcementError
 impl From<String> for EnforcementError {
@@ -90,7 +90,7 @@ mod tests {
         let error = EnforcementError::from("Something went wrong".to_string());
         assert_eq!(error.to_string(), "Enforcement error: Something went wrong");
         
-        let error = EnforcementError::validation("Invalid parameters");
-        assert_eq!(error.to_string(), "Action validation failed: Invalid parameters");
+        // let error = EnforcementError::validation("Invalid parameters");
+        // assert_eq!(error.to_string(), "Action validation failed: Invalid parameters");
     }
 }

@@ -3,7 +3,7 @@ use dashmap::DashMap;
 use std::time::Duration;
 use uuid::Uuid;
 
-use dastardly_daemon::{EnforcementAction, EnforcementState, PendingEnforcement};
+use dastardly_daemon::{EnforcementState, PendingEnforcement, EnforcementAction};
 
 struct TestData {
     pending_enforcements: DashMap<String, PendingEnforcement>,
@@ -44,7 +44,7 @@ fn main() {
         warning_id: warning_id_1,
         user_id,
         guild_id,
-        action: EnforcementAction::VoiceMute { duration: Some(2) },
+        action: EnforcementAction::voice_mute(2),
         execute_at,
         reverse_at: Some(reverse_at),
         state: EnforcementState::Pending,
@@ -63,7 +63,7 @@ fn main() {
         warning_id: warning_id_2,
         user_id,
         guild_id,
-        action: EnforcementAction::VoiceDisconnect { delay: Some(0) },
+        action: EnforcementAction::voice_disconnect(0),
         execute_at: now,
         reverse_at: None,
         state: EnforcementState::Pending,

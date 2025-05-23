@@ -6,7 +6,6 @@ use crate::enforcement_new::{EnforcementRecord, EnforcementState, EnforcementErr
 use dashmap::DashMap;
 use chrono::Utc;
 use std::sync::Arc;
-use tracing::{info, warn};
 
 /// Store for enforcement records
 #[derive(Clone)]
@@ -220,59 +219,59 @@ impl EnforcementStore {
         cancelled
     }
     
-    /// Import records from the old system
-    pub fn import_from_old(&mut self, data: &crate::data::Data) {
-        // Import pending enforcements
-        for entry in &data.pending_enforcements {
-            let old_record = entry.value();
-            let new_record = EnforcementRecord::from_old(old_record);
-            self.add(new_record);
-        }
+//   /// Import records from the old system
+//     pub fn import_from_old(&mut self, data: &crate::data::Data) {
+//         // Import pending enforcements
+//         for entry in &data.pending_enforcements {
+//             let old_record = entry.value();
+//             let new_record = EnforcementRecord::from_old(old_record);
+//             self.add(new_record);
+//         }
         
-        // Import active enforcements
-        for entry in &data.active_enforcements {
-            let old_record = entry.value();
-            let new_record = EnforcementRecord::from_old(old_record);
-            self.add(new_record);
-        }
+//         // Import active enforcements
+//         for entry in &data.active_enforcements {
+//             let old_record = entry.value();
+//             let new_record = EnforcementRecord::from_old(old_record);
+//             self.add(new_record);
+//         }
         
-        // Import completed enforcements
-        for entry in &data.completed_enforcements {
-            let old_record = entry.value();
-            let new_record = EnforcementRecord::from_old(old_record);
-            self.add(new_record);
-        }
+//         // Import completed enforcements
+//         for entry in &data.completed_enforcements {
+//             let old_record = entry.value();
+//             let new_record = EnforcementRecord::from_old(old_record);
+//             self.add(new_record);
+//         }
         
-        info!("Imported {} records from old enforcement system", self.records.len());
-    }
+//         info!("Imported {} records from old enforcement system", self.records.len());
+//     }
     
-    /// Export records to the old system (for backward compatibility)
-    pub fn export_to_old(&self, data: &crate::data::Data) {
-        // Clear old maps
-        data.pending_enforcements.clear();
-        data.active_enforcements.clear();
-        data.completed_enforcements.clear();
+//     /// Export records to the old system (for backward compatibility)
+//     pub fn export_to_old(&self, data: &crate::data::Data) {
+//         // Clear old maps
+//         data.pending_enforcements.clear();
+//         data.active_enforcements.clear();
+//         data.completed_enforcements.clear();
         
-        // Export records by state
-        for entry in self.records.iter() {
-            let record = entry.value();
-            let old_record = record.to_old();
+//         // Export records by state
+//         for entry in self.records.iter() {
+//             let record = entry.value();
+//             let old_record = record.to_old();
             
-            match record.state {
-                EnforcementState::Pending => {
-                    data.pending_enforcements.insert(record.id.clone(), old_record);
-                }
-                EnforcementState::Active => {
-                    data.active_enforcements.insert(record.id.clone(), old_record);
-                }
-                EnforcementState::Reversed | EnforcementState::Completed | EnforcementState::Cancelled => {
-                    data.completed_enforcements.insert(record.id.clone(), old_record);
-                }
-            }
-        }
+//             match record.state {
+//                 EnforcementState::Pending => {
+//                     data.pending_enforcements.insert(record.id.clone(), old_record);
+//                 }
+//                 EnforcementState::Active => {
+//                     data.active_enforcements.insert(record.id.clone(), old_record);
+//                 }
+//                 EnforcementState::Reversed | EnforcementState::Completed | EnforcementState::Cancelled => {
+//                     data.completed_enforcements.insert(record.id.clone(), old_record);
+//                 }
+//             }
+//         }
         
-        info!("Exported {} records to old enforcement system", self.records.len());
-    }
+//         info!("Exported {} records to old enforcement system", self.records.len());
+//     }
 }
 
 #[cfg(test)]

@@ -1,5 +1,6 @@
 use chrono::Utc;
-use dastardly_daemon::data::{Data, EnforcementAction, EnforcementState, PendingEnforcement};
+use dastardly_daemon::data::{Data, EnforcementState, PendingEnforcement};
+use dastardly_daemon::enforcement_new::EnforcementAction;
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -27,7 +28,7 @@ async fn main() {
         warning_id: warning_id_1,
         user_id,
         guild_id,
-        action: EnforcementAction::VoiceMute { duration: Some(2) },
+        action: EnforcementAction::voice_mute(2),
         execute_at,
         reverse_at: Some(reverse_at.clone()),
         state: EnforcementState::Pending,
@@ -46,7 +47,7 @@ async fn main() {
         warning_id: warning_id_2,
         user_id,
         guild_id,
-        action: EnforcementAction::VoiceDisconnect { delay: Some(0) },
+        action: EnforcementAction::voice_disconnect(0),
         execute_at: now.clone(),
         reverse_at: None,
         state: EnforcementState::Pending,

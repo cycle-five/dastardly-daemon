@@ -227,53 +227,53 @@ impl EnforcementRecord {
             && self.reverse_at.unwrap() <= Utc::now()
     }
     
-    /// Convert from old PendingEnforcement format (for backward compatibility)
-    pub fn from_old(old: &crate::data::PendingEnforcement) -> Self {
-        Self {
-            id: old.id.clone(),
-            warning_id: old.warning_id.clone(),
-            user_id: old.user_id,
-            guild_id: old.guild_id,
-            action: EnforcementAction::from_old(&old.action),
-            execute_at: old.execute_at,
-            reverse_at: old.reverse_at,
-            state: match old.state {
-                crate::data::EnforcementState::Pending => EnforcementState::Pending,
-                crate::data::EnforcementState::Active => EnforcementState::Active,
-                crate::data::EnforcementState::Reversed => EnforcementState::Reversed,
-                crate::data::EnforcementState::Completed => EnforcementState::Completed,
-                crate::data::EnforcementState::Cancelled => EnforcementState::Cancelled,
-            },
-            created_at: old.created_at,
-            executed_at: old.executed_at,
-            reversed_at: old.reversed_at,
-            executed: old.executed,
-        }
-    }
+    // /// Convert from old PendingEnforcement format (for backward compatibility)
+    // pub fn from_old(old: &crate::data::PendingEnforcement) -> Self {
+    //     Self {
+    //         id: old.id.clone(),
+    //         warning_id: old.warning_id.clone(),
+    //         user_id: old.user_id,
+    //         guild_id: old.guild_id,
+    //         action: EnforcementAction::from_old(&old.action),
+    //         execute_at: old.execute_at,
+    //         reverse_at: old.reverse_at,
+    //         state: match old.state {
+    //             crate::data::EnforcementState::Pending => EnforcementState::Pending,
+    //             crate::data::EnforcementState::Active => EnforcementState::Active,
+    //             crate::data::EnforcementState::Reversed => EnforcementState::Reversed,
+    //             crate::data::EnforcementState::Completed => EnforcementState::Completed,
+    //             crate::data::EnforcementState::Cancelled => EnforcementState::Cancelled,
+    //         },
+    //         created_at: old.created_at,
+    //         executed_at: old.executed_at,
+    //         reversed_at: old.reversed_at,
+    //         executed: old.executed,
+    //     }
+    // }
     
-    /// Convert to old PendingEnforcement format (for backward compatibility)
-    pub fn to_old(&self) -> crate::data::PendingEnforcement {
-        crate::data::PendingEnforcement {
-            id: self.id.clone(),
-            warning_id: self.warning_id.clone(),
-            user_id: self.user_id,
-            guild_id: self.guild_id,
-            action: self.action.to_old(),
-            execute_at: self.execute_at,
-            reverse_at: self.reverse_at,
-            state: match self.state {
-                EnforcementState::Pending => crate::data::EnforcementState::Pending,
-                EnforcementState::Active => crate::data::EnforcementState::Active,
-                EnforcementState::Reversed => crate::data::EnforcementState::Reversed,
-                EnforcementState::Completed => crate::data::EnforcementState::Completed,
-                EnforcementState::Cancelled => crate::data::EnforcementState::Cancelled,
-            },
-            created_at: self.created_at,
-            executed_at: self.executed_at,
-            reversed_at: self.reversed_at,
-            executed: self.executed,
-        }
-    }
+    // /// Convert to old PendingEnforcement format (for backward compatibility)
+    // pub fn to_old(&self) -> crate::data::PendingEnforcement {
+    //     crate::data::PendingEnforcement {
+    //         id: self.id.clone(),
+    //         warning_id: self.warning_id.clone(),
+    //         user_id: self.user_id,
+    //         guild_id: self.guild_id,
+    //         action: self.action.to_old(),
+    //         execute_at: self.execute_at,
+    //         reverse_at: self.reverse_at,
+    //         state: match self.state {
+    //             EnforcementState::Pending => crate::data::EnforcementState::Pending,
+    //             EnforcementState::Active => crate::data::EnforcementState::Active,
+    //             EnforcementState::Reversed => crate::data::EnforcementState::Reversed,
+    //             EnforcementState::Completed => crate::data::EnforcementState::Completed,
+    //             EnforcementState::Cancelled => crate::data::EnforcementState::Cancelled,
+    //         },
+    //         created_at: self.created_at,
+    //         executed_at: self.executed_at,
+    //         reversed_at: self.reversed_at,
+    //         executed: self.executed,
+    //     }
+    // }
 }
 
 #[cfg(test)]
