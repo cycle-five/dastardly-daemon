@@ -1,11 +1,8 @@
+use crate::enforcement_new::EnforcementAction;
 use crate::{
-    data::{
-        Data, GuildConfig, NotificationMethod,
-        UserWarningState, Warning, WarningContext,
-    }, data_ext::DataEnforcementExt, enforcement_new::ActionParams, status::format_complete_status
-};
-use crate::enforcement_new::{
-    EnforcementAction
+    data::{Data, GuildConfig, NotificationMethod, UserWarningState, Warning, WarningContext},
+    data_ext::DataEnforcementExt,
+    status::format_complete_status,
 };
 type Error = Box<dyn std::error::Error + Send + Sync>;
 use ::serenity::all::CacheHttp;
@@ -90,20 +87,20 @@ fn get_enforcement_action(
     } else if state.warning_timestamps.len() == 1 {
         // This is the first warning, set a pending enforcement based on infraction type
         warn!("First warning for user: {user_id}, guild: {guild_id}, state: {state:?}");
-        let enforcement =
-            match infraction_type {
-                "voice" => guild_config.default_enforcement.clone().unwrap_or(
-                    EnforcementAction::voice_mute(300),
-                ),
-                "server" => guild_config
-                    .default_enforcement
-                    .clone()
-                    .unwrap_or(EnforcementAction::kick(0)),
-                _ => guild_config // text
-                    .default_enforcement
-                    .clone()
-                    .unwrap_or(EnforcementAction::mute(300)),
-            };
+        let enforcement = match infraction_type {
+            "voice" => guild_config
+                .default_enforcement
+                .clone()
+                .unwrap_or(EnforcementAction::voice_mute(300)),
+            "server" => guild_config
+                .default_enforcement
+                .clone()
+                .unwrap_or(EnforcementAction::kick(0)),
+            _ => guild_config // text
+                .default_enforcement
+                .clone()
+                .unwrap_or(EnforcementAction::mute(300)),
+        };
 
         // Store the pending enforcement in the user state
         let key = format!("{user_id}:{guild_id}");
@@ -139,15 +136,13 @@ fn get_enforcement_action(
                     }
                     1 => EnforcementAction::voice_deafen(900), // 15 minutes of deafening
                     2 => EnforcementAction::voice_disconnect(0), // Immediate disconnection
-                    _ => EnforcementAction::voice_mute(1200), // 20 minutes of voice mute
+                    _ => EnforcementAction::voice_mute(1200),  // 20 minutes of voice mute
                 }
             }
-            "server" => {
-                guild_config
-                    .default_enforcement
-                    .clone()
-                    .unwrap_or(EnforcementAction::mute(3600))
-            }
+            "server" => guild_config
+                .default_enforcement
+                .clone()
+                .unwrap_or(EnforcementAction::mute(3600)),
             _ => guild_config // text
                 .default_enforcement
                 .clone()
@@ -372,7 +367,7 @@ pub async fn summon_daemon(
 
     // Generate a demonic message based on the context
     let demonic_message =
-        generate_daemon_response(&warning_context.to_string(), Some(&state), response_type).await;
+        generate_daemon_response(&warning_context.to_string(), Some(&state), response_type);
 
     // Log to Discord if configured
     if let Some(log_channel_id) = guild_config.enforcement_log_channel_id {
@@ -421,12 +416,12 @@ pub async fn summon_daemon(
 /// Generate a demonic response based on the context.
 /// This should be used to create thematic messages for the daemon via
 /// the LLM integration.
-async fn generate_daemon_response(
+fn generate_daemon_response(
     warning_context: &str,
     state: Option<&UserWarningState>,
     response_type: crate::daemon_response::ResponseType,
 ) -> String {
-    crate::daemon_response::generate_daemon_response(warning_context, state, response_type).await
+    crate::daemon_response::generate_daemon_response(warning_context, state, response_type)
 }
 
 /// [DEPRECATED] Warn a user for inappropriate behavior.
@@ -510,8 +505,7 @@ pub async fn warn(
             user.id.get(),
             guild_id.get(),
             action,
-        )
-        .await;
+        );
         info!("Pending enforcement created with ID: {}", enforcement_id);
         info!(
             "Pending enforcements: {:?}",
@@ -593,7 +587,7 @@ pub async fn warn(
             "Immediate enforcement action detected"
         );
 
-        if is_immediate_action(action) {
+        if action.is_immediate() {
             info!(
                 target: crate::COMMAND_TARGET,
                 command = "warn",
@@ -657,8 +651,7 @@ pub async fn daemon_altar(
         &context,
         None,
         crate::daemon_response::ResponseType::Summoning,
-    )
-    .await;
+    );
 
     // Save data
     if (save_data(&ctx, "setting enforcement log channel").await).is_err() {
@@ -743,8 +736,7 @@ pub async fn chaos_ritual(
         &context,
         None,
         crate::daemon_response::ResponseType::ChaosRitual,
-    )
-    .await;
+    );
 
     // Create a more thematic message based on the chaos level
     let ritual_status = if factor < 0.2 {
@@ -860,7 +852,7 @@ pub async fn judgment_history(
     };
 
     let demonic_message =
-        generate_daemon_response(&warn_context.to_string(), Some(&state), response_type).await;
+        generate_daemon_response(&warn_context.to_string(), Some(&state), response_type);
 
     // Create thematic header based on warning score
     let header = if score > WARNING_THRESHOLD {
@@ -1000,15 +992,22 @@ pub async fn appease(
                     // Convert to old format for display
                     canceled_enforcements.push(record.clone());
                     canceled = true;
-                    
+
                     // Process the cancellation
-                    let _ = ctx.data().process_enforcement(&ctx.serenity_context().http, &eid).await;
+                    let _ = ctx
+                        .data()
+                        .process_enforcement(&ctx.serenity_context().http, &eid)
+                        .await;
                 }
             }
         }
     } else {
         // Cancel all enforcements for this user
-        match ctx.data().cancel_user_enforcements(&ctx.serenity_context().http, user_id, guild_id.get()).await {
+        match ctx
+            .data()
+            .cancel_user_enforcements(&ctx.serenity_context().http, user_id, guild_id.get())
+            .await
+        {
             Ok(records) => {
                 if !records.is_empty() {
                     canceled = true;
@@ -1041,8 +1040,7 @@ pub async fn appease(
         &context,
         Some(&user_state),
         crate::daemon_response::ResponseType::Appeasement,
-    )
-    .await;
+    );
 
     if canceled {
         // Check if any of the canceled enforcements involved voice
@@ -1145,6 +1143,7 @@ pub async fn daemon_status(ctx: Context<'_, Data, Error>) -> Result<(), Error> {
 }
 
 /// Logs a daemon warning/enforcement to the guild's log channel
+#[allow(clippy::too_many_arguments)]
 async fn log_daemon_warning(
     ctx: &Context<'_, Data, Error>,
     log_channel_id: u64,
@@ -1252,6 +1251,7 @@ async fn log_daemon_warning(
 }
 
 /// Calculates the execution time for an enforcement action
+#[allow(unused)]
 pub fn calculate_execute_at(action: &EnforcementAction) -> chrono::DateTime<Utc> {
     match action {
         EnforcementAction::Ban(params)
@@ -1271,7 +1271,7 @@ pub fn calculate_execute_at(action: &EnforcementAction) -> chrono::DateTime<Utc>
 }
 
 /// Creates and stores a pending enforcement using the new system
-async fn create_pending_enforcement(
+fn create_pending_enforcement(
     ctx: &Context<'_, Data, Error>,
     warning_id: String,
     user_id: u64,
@@ -1279,13 +1279,18 @@ async fn create_pending_enforcement(
     action: EnforcementAction,
 ) -> String {
     //let new_action = crate::enforcement_new::EnforcementAction::from_old(&action);
-    let record = ctx.data().create_enforcement(warning_id, user_id, guild_id, action);
+    let record = ctx
+        .data()
+        .create_enforcement(warning_id, user_id, guild_id, action);
     record.id
 }
 
 /// Notifies the enforcement task about a user
 async fn notify_enforcement_task(ctx: &Context<'_, Data, Error>, user_id: u64, guild_id: u64) {
-    let _ = ctx.data().notify_enforcement_about_user(user_id, guild_id).await;
+    let _ = ctx
+        .data()
+        .notify_enforcement_about_user(user_id, guild_id)
+        .await;
 }
 
 /// Saves data with appropriate error handling
@@ -1297,21 +1302,6 @@ async fn save_data(ctx: &Context<'_, Data, Error>, error_context: &str) -> Resul
     Ok(())
 }
 
-/// Checks if an enforcement action should be applied immediately
-fn is_immediate_action(action: &EnforcementAction) -> bool {
-    match action {
-        EnforcementAction::Kick(params) | EnforcementAction::VoiceDisconnect(params) => {
-            !params.has_duration() || params.duration_or_default() == 0
-        }
-        EnforcementAction::Mute(..)
-        | EnforcementAction::VoiceMute(..)
-        | EnforcementAction::VoiceDeafen(..)
-        | EnforcementAction::Ban(..)
-        | EnforcementAction::VoiceChannelHaunt(..) => true,
-        EnforcementAction::None => false,
-    }
-}
-
 /// Creates a pending enforcement and notifies if immediate
 async fn create_and_notify_enforcement(
     ctx: &Context<'_, Data, Error>,
@@ -1320,18 +1310,19 @@ async fn create_and_notify_enforcement(
     guild_id: u64,
     action: EnforcementAction,
 ) {
-    let _enforcement_id =
-        create_pending_enforcement(ctx, warning_id, user_id, guild_id, action.clone()).await;
+    let enforcement_id =
+        create_pending_enforcement(ctx, warning_id, user_id, guild_id, action.clone());
+    info!("Pending enforcement created with ID: {enforcement_id}");
 
-    if is_immediate_action(&action) {
+    if action.is_immediate() {
         notify_enforcement_task(ctx, user_id, guild_id).await;
     }
 }
 
-/// Notifies the enforcement task about a specific enforcement
-async fn notify_enforcement_task_by_id(ctx: &Context<'_, Data, Error>, enforcement_id: String) {
-    let _ = ctx.data().process_enforcement(&ctx.serenity_context().http, &enforcement_id).await;
-}
+// /// Notifies the enforcement task about a specific enforcement
+// async fn notify_enforcement_task_by_id(ctx: &Context<'_, Data, Error>, enforcement_id: String) {
+//     let _ = ctx.data().process_enforcement(&ctx.serenity_context().http, &enforcement_id).await;
+// }
 
 #[cfg(test)]
 mod tests {

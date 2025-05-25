@@ -5,19 +5,20 @@
 
 mod action;
 mod error;
+mod handler;
 mod record;
 mod service;
 mod store;
-mod handler;
 
-pub use action::{ActionParams, EnforcementAction, EnforcementActionType, HauntParams};
+pub use action::{EnforcementAction, EnforcementActionType};
 pub use error::{EnforcementError, EnforcementResult};
+pub use handler::ActionHandlerRegistry;
 pub use record::{EnforcementRecord, EnforcementState};
 pub use service::EnforcementService;
 pub use store::EnforcementStore;
-pub use handler::ActionHandlerRegistry;
 
 /// Request type for the enforcement task
+#[allow(unused)]
 #[derive(Debug, Clone)]
 pub enum EnforcementCheckRequest {
     /// Check for all pending enforcements regardless of timing

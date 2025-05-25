@@ -3,7 +3,7 @@ use dashmap::DashMap;
 use std::time::Duration;
 use uuid::Uuid;
 
-use dastardly_daemon::{EnforcementState, PendingEnforcement, EnforcementAction};
+use dastardly_daemon::{EnforcementAction, EnforcementState, PendingEnforcement};
 
 struct TestData {
     pending_enforcements: DashMap<String, PendingEnforcement>,

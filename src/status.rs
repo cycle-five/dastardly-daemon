@@ -6,6 +6,7 @@ use poise::serenity_prelude as serenity;
 use serenity::builder::CreateEmbed;
 use serenity::model::id::{ChannelId, GuildId, UserId};
 use std::collections::HashSet;
+use std::fmt::Write as _;
 use std::fmt::{Display, Formatter};
 use std::time::SystemTime;
 use tracing::info;
@@ -564,10 +565,11 @@ pub fn format_enforcement_status(data: &Data) -> String {
             // Format the action in a more readable way
             let action_str = format_enforcement_action(&enforcement.action);
 
-            result.push_str(&format!(
-                "- **{user_name}**: {action_str} - Scheduled at {}\n",
+            let _ = writeln!(
+                result,
+                "- **{user_name}**: {action_str} - Scheduled at {}",
                 enforcement.execute_at
-            ));
+            );
         }
 
         result.push('\n');
@@ -575,7 +577,7 @@ pub fn format_enforcement_status(data: &Data) -> String {
 
     // Process active enforcements
     if !active.is_empty() {
-        result.push_str("### Active Enforcements\n");
+        let _ = writeln!(result, "### Active Enforcements\n");
 
         for enforcement in active {
             let user_id = enforcement.user_id;
@@ -595,7 +597,7 @@ pub fn format_enforcement_status(data: &Data) -> String {
                 String::new()
             };
 
-            result.push_str(&format!("- **{user_name}**: {action_str}{reversal_info}\n",));
+            let _ = writeln!(result, "- **{user_name}**: {action_str}{reversal_info}");
         }
     }
 
@@ -633,7 +635,10 @@ fn format_enforcement_action(action: &EnforcementAction) -> String {
             format!("Voice muted for {} seconds", params.duration_or_default())
         }
         EnforcementAction::VoiceDeafen(params) => {
-            format!("Voice deafened for {} seconds", params.duration_or_default())
+            format!(
+                "Voice deafened for {} seconds",
+                params.duration_or_default()
+            )
         }
         EnforcementAction::VoiceDisconnect(params) => {
             if params.has_duration() {
@@ -675,15 +680,17 @@ pub async fn format_complete_status(
     let mut result = String::new();
 
     // System status summary
-    result.push_str("# Dastardly Daemon Status Report\n\n");
+    let _ = writeln!(result, "# Dastardly Daemon Status Report\n");
 
-    result.push_str(&format!(
-        "**Active Voice Channels**: {total_channels} (with {issue_channels} having warned/enforced users)\n",
-    ));
+    let _ = writeln!(
+        result,
+        "**Active Voice Channels**: {total_channels} (with {issue_channels} having warned/enforced users)",
+    );
 
-    result.push_str(&format!(
-        "**Users in Voice**: {total_users} (with {issue_users} having warnings/enforcements)\n",
-    ));
+    let _ = writeln!(
+        result,
+        "**Users in Voice**: {total_users} (with {issue_users} having warnings/enforcements)",
+    );
 
     let channels_with_issues = bot_status.get_channels_with_issues();
     let num_channels_with_issues = channels_with_issues.len();
@@ -695,42 +702,47 @@ pub async fn format_complete_status(
 
     // Add problematic channels/users
     if num_channels_with_issues > 0 {
-        result.push_str(&format!(
-            "**Problematic Channels**: {num_channels_with_issues} channels with warned/enforced users\n"
-        ));
+        let _ = writeln!(
+            result,
+            "**Problematic Channels**: {num_channels_with_issues} channels with warned/enforced users"
+        );
     }
     if num_users_with_issues > 0 {
-        result.push_str(&format!(
-            "**Problematic Users**: {num_users_with_issues} users with warnings/enforcements\n"
-        ));
+        let _ = writeln!(
+            result,
+            "**Problematic Users**: {num_users_with_issues} users with warnings/enforcements"
+        );
     }
 
     // Add pending/active enforcement counts
     let pending_count = data.pending_enforcements.len();
     let active_count = data.active_enforcements.len();
 
-    result.push_str(&format!(
-        "**Enforcements**: {pending_count} pending, {active_count} active\n",
-    ));
-
-    result.push_str(&format!(
-        "**Last Status Update**: {}\n\n",
+    let _ = writeln!(
+        result,
+        "**Enforcements**: {pending_count} pending, {active_count} active"
+    );
+    let _ = writeln!(
+        result,
+        "**Last Status Update**: {}\n",
         format_system_time(bot_status.last_status_check)
-    ));
+    );
 
     // Add detailed sections
     if issue_channels > 0 {
-        result.push_str(&format_active_channels(bot_status, data));
-        result.push('\n');
+        let _ = write!(result, "{}", format_active_channels(bot_status, data));
     }
 
     if issue_users > 0 {
-        result.push_str(&format_problematic_users(bot_status, data, cache_http).await);
-        result.push('\n');
+        let _ = writeln!(
+            result,
+            "{}",
+            &format_problematic_users(bot_status, data, cache_http).await
+        );
     }
 
     if pending_count > 0 || active_count > 0 {
-        result.push_str(&format_enforcement_status(data));
+        let _ = write!(result, "{}", format_enforcement_status(data));
     }
 
     result
@@ -796,8 +808,7 @@ pub fn _create_status_embed(bot_status: &BotStatus, data: &Data) -> CreateEmbed 
             let user_name = data
                 .cache
                 .user(user.user_id)
-                .map(|u| u.name.clone())
-                .unwrap_or_else(|| format!("User {}", user.user_id));
+                .map_or_else(|| format!("User {}", user.user_id), |u| u.name.clone());
 
             let status = if user.has_enforcements {
                 "🔴"
@@ -807,10 +818,12 @@ pub fn _create_status_embed(bot_status: &BotStatus, data: &Data) -> CreateEmbed 
                 "⚪"
             };
 
-            user_list.push_str(&format!(
-                "{status} **{user_name}** - Score: {:.2}\n",
+            writeln!(
+                user_list,
+                "{status} **{user_name}** - Score: {:.2}",
                 user.warning_score
-            ));
+            )
+            .unwrap();
         }
 
         if !user_list.is_empty() {

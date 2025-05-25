@@ -5,8 +5,8 @@ use std::{
     sync::Arc,
 };
 
-use crate::enforcement_new::EnforcementCheckRequest;
 use crate::enforcement_new::EnforcementAction;
+use crate::enforcement_new::EnforcementCheckRequest;
 use crate::status::BotStatus;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
@@ -71,7 +71,6 @@ pub enum NotificationMethod {
     DirectMessage,
     PublicWithMention,
 }
-
 
 /// Represents a warning issued to a user
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -264,6 +263,7 @@ impl DerefMut for Data {
     }
 }
 
+#[allow(unused)]
 impl Data {
     /// Create a new Data instance
     #[must_use]

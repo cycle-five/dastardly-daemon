@@ -47,11 +47,12 @@ impl fmt::Display for EnforcementActionType {
 pub struct ActionParams {
     /// Duration in seconds for timed actions, or delay for immediate actions
     pub duration: Option<u64>,
-    
+
     /// Reason for the action (for audit logs)
     pub reason: Option<String>,
 }
 
+#[allow(unused)]
 impl ActionParams {
     /// Create new action parameters with the specified duration
     pub fn new(duration: Option<u64>) -> Self {
@@ -60,7 +61,7 @@ impl ActionParams {
             reason: None,
         }
     }
-    
+
     /// Create new action parameters with the specified duration and reason
     pub fn with_reason(duration: Option<u64>, reason: impl Into<String>) -> Self {
         Self {
@@ -68,12 +69,12 @@ impl ActionParams {
             reason: Some(reason.into()),
         }
     }
-    
+
     /// Get the duration or a default value
     pub fn duration_or_default(&self) -> u64 {
         self.duration.unwrap_or(0)
     }
-    
+
     /// Check if the action has a duration (i.e., is timed)
     pub fn has_duration(&self) -> bool {
         self.duration.is_some() && self.duration.unwrap() > 0
@@ -85,13 +86,13 @@ impl ActionParams {
 pub struct HauntParams {
     /// Number of times to teleport the user between channels
     pub teleport_count: Option<u64>,
-    
+
     /// Seconds between each teleport
     pub interval: Option<u64>,
-    
+
     /// Whether to eventually return the user to their original channel
     pub return_to_origin: Option<bool>,
-    
+
     /// Original voice channel ID to potentially return to
     pub original_channel_id: Option<u64>,
 }
@@ -111,17 +112,17 @@ impl HauntParams {
             original_channel_id,
         }
     }
-    
+
     /// Get the teleport count or a default value
     pub fn teleport_count_or_default(&self) -> u64 {
         self.teleport_count.unwrap_or(3)
     }
-    
+
     /// Get the interval or a default value
     pub fn interval_or_default(&self) -> u64 {
         self.interval.unwrap_or(10)
     }
-    
+
     /// Get whether to return to origin or a default value
     pub fn return_to_origin_or_default(&self) -> bool {
         self.return_to_origin.unwrap_or(true)
@@ -133,25 +134,25 @@ impl HauntParams {
 pub enum EnforcementAction {
     /// No action (placeholder)
     None,
-    
+
     /// Text channel timeout
     Mute(ActionParams),
-    
+
     /// Server ban
     Ban(ActionParams),
-    
+
     /// Server kick
     Kick(ActionParams),
-    
+
     /// Voice mute
     VoiceMute(ActionParams),
-    
+
     /// Voice deafen
     VoiceDeafen(ActionParams),
-    
+
     /// Voice disconnect
     VoiceDisconnect(ActionParams),
-    
+
     /// Voice channel haunting (teleportation)
     VoiceChannelHaunt(HauntParams),
 }
@@ -176,22 +177,20 @@ impl EnforcementAction {
             Self::VoiceChannelHaunt(_) => EnforcementActionType::VoiceChannelHaunt,
         }
     }
-    
+
     /// Check if this action needs reversal
     pub fn needs_reversal(&self) -> bool {
         match self {
             Self::None => false,
-            Self::Mute(params) | 
-            Self::Ban(params) | 
-            Self::VoiceMute(params) | 
-            Self::VoiceDeafen(params) => params.has_duration(),
+            Self::Mute(params)
+            | Self::Ban(params)
+            | Self::VoiceMute(params)
+            | Self::VoiceDeafen(params) => params.has_duration(),
             // These don't need reversal
-            Self::Kick(_) | 
-            Self::VoiceDisconnect(_) | 
-            Self::VoiceChannelHaunt(_) => false,
+            Self::Kick(_) | Self::VoiceDisconnect(_) | Self::VoiceChannelHaunt(_) => false,
         }
     }
-    
+
     /// Check if this action is immediate (should be executed right away)
     pub fn is_immediate(&self) -> bool {
         match self {
@@ -199,46 +198,46 @@ impl EnforcementAction {
             Self::Kick(params) | Self::VoiceDisconnect(params) => {
                 // These are immediate if delay is 0 or not set
                 !params.has_duration() || params.duration_or_default() == 0
-            },
+            }
             Self::VoiceChannelHaunt(params) => {
                 // Haunting is immediate if interval is 0 or not set
                 params.interval.is_none() || params.interval.unwrap() == 0
-            },
+            }
             // Other actions are always immediate
             Self::Mute(_) | Self::Ban(_) | Self::VoiceMute(_) | Self::VoiceDeafen(_) => true,
         }
     }
-    
+
     /// Create a new Mute action
     pub fn mute(duration: impl Into<Option<u64>>) -> Self {
         Self::Mute(ActionParams::new(duration.into()))
     }
-    
+
     /// Create a new Ban action
     pub fn ban(duration: impl Into<Option<u64>>) -> Self {
         Self::Ban(ActionParams::new(duration.into()))
     }
-    
+
     /// Create a new Kick action
     pub fn kick(delay: impl Into<Option<u64>>) -> Self {
         Self::Kick(ActionParams::new(delay.into()))
     }
-    
+
     /// Create a new VoiceMute action
     pub fn voice_mute(duration: impl Into<Option<u64>>) -> Self {
         Self::VoiceMute(ActionParams::new(duration.into()))
     }
-    
+
     /// Create a new VoiceDeafen action
     pub fn voice_deafen(duration: impl Into<Option<u64>>) -> Self {
         Self::VoiceDeafen(ActionParams::new(duration.into()))
     }
-    
+
     /// Create a new VoiceDisconnect action
     pub fn voice_disconnect(delay: impl Into<Option<u64>>) -> Self {
         Self::VoiceDisconnect(ActionParams::new(delay.into()))
     }
-    
+
     /// Create a new VoiceChannelHaunt action
     pub fn voice_channel_haunt(
         teleport_count: impl Into<Option<u64>>,
@@ -253,13 +252,12 @@ impl EnforcementAction {
             original_channel_id.into(),
         ))
     }
-    
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_action_needs_reversal() {
         // Actions without duration don't need reversal
@@ -267,13 +265,13 @@ mod tests {
         assert!(!EnforcementAction::ban(None).needs_reversal());
         assert!(!EnforcementAction::voice_mute(None).needs_reversal());
         assert!(!EnforcementAction::voice_deafen(None).needs_reversal());
-        
+
         // Actions with duration do need reversal
         assert!(EnforcementAction::mute(300).needs_reversal());
         assert!(EnforcementAction::ban(3600).needs_reversal());
         assert!(EnforcementAction::voice_mute(600).needs_reversal());
         assert!(EnforcementAction::voice_deafen(900).needs_reversal());
-        
+
         // One-time actions never need reversal
         assert!(!EnforcementAction::kick(None).needs_reversal());
         assert!(!EnforcementAction::voice_disconnect(None).needs_reversal());
@@ -282,7 +280,7 @@ mod tests {
         assert!(!EnforcementAction::voice_disconnect(5).needs_reversal());
         assert!(!EnforcementAction::voice_channel_haunt(3, 10, true, 12345).needs_reversal());
     }
-    
+
     #[test]
     fn test_action_is_immediate() {
         // Actions without delay parameters are immediate
@@ -290,50 +288,71 @@ mod tests {
         assert!(EnforcementAction::ban(3600).is_immediate());
         assert!(EnforcementAction::voice_mute(600).is_immediate());
         assert!(EnforcementAction::voice_deafen(900).is_immediate());
-        
+
         // Actions with 0 delay are immediate
         assert!(EnforcementAction::kick(0).is_immediate());
         assert!(EnforcementAction::voice_disconnect(0).is_immediate());
         assert!(EnforcementAction::voice_channel_haunt(3, 0, true, 12345).is_immediate());
-        
+
         // Actions with delay are not immediate
         assert!(!EnforcementAction::kick(10).is_immediate());
         assert!(!EnforcementAction::voice_disconnect(5).is_immediate());
         assert!(!EnforcementAction::voice_channel_haunt(3, 10, true, 12345).is_immediate());
     }
-    
+
     #[test]
     fn test_action_type() {
-        assert_eq!(EnforcementAction::None.get_type(), EnforcementActionType::None);
-        assert_eq!(EnforcementAction::mute(300).get_type(), EnforcementActionType::Mute);
-        assert_eq!(EnforcementAction::ban(3600).get_type(), EnforcementActionType::Ban);
-        assert_eq!(EnforcementAction::kick(0).get_type(), EnforcementActionType::Kick);
-        assert_eq!(EnforcementAction::voice_mute(600).get_type(), EnforcementActionType::VoiceMute);
-        assert_eq!(EnforcementAction::voice_deafen(900).get_type(), EnforcementActionType::VoiceDeafen);
-        assert_eq!(EnforcementAction::voice_disconnect(5).get_type(), EnforcementActionType::VoiceDisconnect);
         assert_eq!(
-            EnforcementAction::voice_channel_haunt(3, 10, true, 12345).get_type(), 
+            EnforcementAction::None.get_type(),
+            EnforcementActionType::None
+        );
+        assert_eq!(
+            EnforcementAction::mute(300).get_type(),
+            EnforcementActionType::Mute
+        );
+        assert_eq!(
+            EnforcementAction::ban(3600).get_type(),
+            EnforcementActionType::Ban
+        );
+        assert_eq!(
+            EnforcementAction::kick(0).get_type(),
+            EnforcementActionType::Kick
+        );
+        assert_eq!(
+            EnforcementAction::voice_mute(600).get_type(),
+            EnforcementActionType::VoiceMute
+        );
+        assert_eq!(
+            EnforcementAction::voice_deafen(900).get_type(),
+            EnforcementActionType::VoiceDeafen
+        );
+        assert_eq!(
+            EnforcementAction::voice_disconnect(5).get_type(),
+            EnforcementActionType::VoiceDisconnect
+        );
+        assert_eq!(
+            EnforcementAction::voice_channel_haunt(3, 10, true, 12345).get_type(),
             EnforcementActionType::VoiceChannelHaunt
         );
     }
-    
+
     #[test]
     fn test_action_params() {
         let params = ActionParams::new(Some(300));
         assert_eq!(params.duration, Some(300));
         assert!(params.has_duration());
         assert_eq!(params.duration_or_default(), 300);
-        
+
         let params = ActionParams::new(None);
         assert_eq!(params.duration, None);
         assert!(!params.has_duration());
         assert_eq!(params.duration_or_default(), 0);
-        
+
         let params = ActionParams::with_reason(Some(300), "Test reason");
         assert_eq!(params.duration, Some(300));
         assert_eq!(params.reason, Some("Test reason".to_string()));
     }
-    
+
     #[test]
     fn test_haunt_params() {
         let params = HauntParams::new(Some(3), Some(10), Some(true), Some(12345));
@@ -344,7 +363,7 @@ mod tests {
         assert_eq!(params.teleport_count_or_default(), 3);
         assert_eq!(params.interval_or_default(), 10);
         assert!(params.return_to_origin_or_default());
-        
+
         let params = HauntParams::default();
         assert_eq!(params.teleport_count, None);
         assert_eq!(params.interval, None);

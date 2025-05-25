@@ -60,7 +60,7 @@ pub enum ResponseType {
 ///
 /// A string containing the generated response
 #[cfg(not(feature = "llm"))]
-pub async fn generate_daemon_response(
+pub fn generate_daemon_response(
     _warning_context: &str,
     user_history: Option<&UserWarningState>,
     response_type: ResponseType,

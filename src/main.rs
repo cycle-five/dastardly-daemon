@@ -47,19 +47,19 @@ async fn async_main() -> Result<(), Error> {
     // Initialize the new enforcement system
     info!("Initializing new enforcement system...");
     data.init_enforcement_service();
-    
+
     // Create enforcement channel and start the task with the new system
     info!("Creating enforcement channel and starting enforcement task...");
     let http: std::sync::Arc<serenity::Http> = serenity::Http::new(&token).into();
     data.import_and_start_enforcement(http.clone(), 60); // Check interval in seconds
-    
+
     // // For backward compatibility, also initialize the old enforcement system
     // let enforcement_tx = enforcement::create_enforcement_channel();
     // data.set_enforcement_tx(enforcement_tx);
-    
+
     // Keep a clone for the Poise framework below
     let data_cloned = data.clone();
-    
+
     // // For backward compatibility, also start the old enforcement task
     // if let Some(rx) = enforcement::take_enforcement_receiver() {
     //     info!("Starting old enforcement task (for backward compatibility)...");

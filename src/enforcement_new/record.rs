@@ -6,7 +6,7 @@
 use crate::enforcement_new::{EnforcementAction, EnforcementError};
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
-use tracing::{info, warn};
+use tracing::info;
 use uuid::Uuid;
 
 /// Enforcement action lifecycle states
@@ -73,11 +73,16 @@ pub struct EnforcementRecord {
 
 impl EnforcementRecord {
     /// Create a new enforcement record
-    pub fn new(warning_id: impl Into<String>, user_id: u64, guild_id: u64, action: EnforcementAction) -> Self {
+    pub fn new(
+        warning_id: impl Into<String>,
+        user_id: u64,
+        guild_id: u64,
+        action: EnforcementAction,
+    ) -> Self {
         let id = Uuid::new_v4().to_string();
         let now = Utc::now();
         let execute_at = Self::calculate_execute_time(&action);
-        
+
         Self {
             id,
             warning_id: warning_id.into(),
@@ -93,11 +98,11 @@ impl EnforcementRecord {
             executed: false,
         }
     }
-    
+
     /// Calculate the execution time for an action
     pub fn calculate_execute_time(action: &EnforcementAction) -> DateTime<Utc> {
         let now = Utc::now();
-        
+
         match action {
             EnforcementAction::Kick(params) | EnforcementAction::VoiceDisconnect(params) => {
                 if let Some(delay) = params.duration {
@@ -119,20 +124,20 @@ impl EnforcementRecord {
             _ => now,
         }
     }
-    
+
     /// Calculate when an action should be reversed (if applicable)
     pub fn calculate_reversal_time(&self) -> Option<DateTime<Utc>> {
         if !self.action.needs_reversal() {
             return None;
         }
-        
+
         let now = Utc::now();
-        
+
         match &self.action {
-            EnforcementAction::Mute(params) |
-            EnforcementAction::Ban(params) |
-            EnforcementAction::VoiceMute(params) |
-            EnforcementAction::VoiceDeafen(params) => {
+            EnforcementAction::Mute(params)
+            | EnforcementAction::Ban(params)
+            | EnforcementAction::VoiceMute(params)
+            | EnforcementAction::VoiceDeafen(params) => {
                 if let Some(duration) = params.duration {
                     if duration > 0 {
                         return Some(now + Duration::seconds(duration as i64));
@@ -144,26 +149,26 @@ impl EnforcementRecord {
             _ => None,
         }
     }
-    
+
     /// Execute this enforcement, transitioning to Active or Completed
     pub fn execute(&mut self) -> Result<(), EnforcementError> {
         if self.state != EnforcementState::Pending {
             return Err(EnforcementError::InvalidStateTransition);
         }
-        
+
         // Calculate reversal time if needed
         self.reverse_at = self.calculate_reversal_time();
-        
+
         // Set state based on whether reversal is needed
         self.state = if self.reverse_at.is_some() {
             EnforcementState::Active
         } else {
             EnforcementState::Completed
         };
-        
+
         self.executed_at = Some(Utc::now());
         self.executed = true; // For backward compatibility
-        
+
         info!(
             enforcement_id = %self.id,
             user_id = %self.user_id,
@@ -172,19 +177,19 @@ impl EnforcementRecord {
             reverse_at = ?self.reverse_at,
             "Enforcement action executed"
         );
-        
+
         Ok(())
     }
-    
+
     /// Reverse this enforcement, transitioning to Reversed
     pub fn reverse(&mut self) -> Result<(), EnforcementError> {
         if self.state != EnforcementState::Active {
             return Err(EnforcementError::InvalidStateTransition);
         }
-        
+
         self.state = EnforcementState::Reversed;
         self.reversed_at = Some(Utc::now());
-        
+
         info!(
             enforcement_id = %self.id,
             user_id = %self.user_id,
@@ -192,18 +197,18 @@ impl EnforcementRecord {
             action_type = %self.action.get_type(),
             "Enforcement action reversed"
         );
-        
+
         Ok(())
     }
-    
+
     /// Cancel this enforcement, transitioning to Cancelled
     pub fn cancel(&mut self) -> Result<(), EnforcementError> {
         if self.state != EnforcementState::Pending && self.state != EnforcementState::Active {
             return Err(EnforcementError::InvalidStateTransition);
         }
-        
+
         self.state = EnforcementState::Cancelled;
-        
+
         info!(
             enforcement_id = %self.id,
             user_id = %self.user_id,
@@ -211,22 +216,22 @@ impl EnforcementRecord {
             action_type = %self.action.get_type(),
             "Enforcement action cancelled"
         );
-        
+
         Ok(())
     }
-    
+
     /// Check if this enforcement is due for execution
     pub fn is_due_for_execution(&self) -> bool {
         self.state == EnforcementState::Pending && self.execute_at <= Utc::now()
     }
-    
+
     /// Check if this enforcement is due for reversal
     pub fn is_due_for_reversal(&self) -> bool {
-        self.state == EnforcementState::Active 
-            && self.reverse_at.is_some() 
+        self.state == EnforcementState::Active
+            && self.reverse_at.is_some()
             && self.reverse_at.unwrap() <= Utc::now()
     }
-    
+
     // /// Convert from old PendingEnforcement format (for backward compatibility)
     // pub fn from_old(old: &crate::data::PendingEnforcement) -> Self {
     //     Self {
@@ -250,7 +255,7 @@ impl EnforcementRecord {
     //         executed: old.executed,
     //     }
     // }
-    
+
     // /// Convert to old PendingEnforcement format (for backward compatibility)
     // pub fn to_old(&self) -> crate::data::PendingEnforcement {
     //     crate::data::PendingEnforcement {
@@ -279,136 +284,116 @@ impl EnforcementRecord {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_enforcement_state_transitions() {
         // Create a new record
-        let mut record = EnforcementRecord::new(
-            "warning-123",
-            12345,
-            67890,
-            EnforcementAction::mute(300),
-        );
-        
+        let mut record =
+            EnforcementRecord::new("warning-123", 12345, 67890, EnforcementAction::mute(300));
+
         // Initial state should be Pending
         assert_eq!(record.state, EnforcementState::Pending);
         assert!(!record.executed);
         assert!(record.executed_at.is_none());
-        
+
         // Execute should transition to Active (since it needs reversal)
         record.execute().unwrap();
         assert_eq!(record.state, EnforcementState::Active);
         assert!(record.executed);
         assert!(record.executed_at.is_some());
         assert!(record.reverse_at.is_some());
-        
+
         // Reverse should transition to Reversed
         record.reverse().unwrap();
         assert_eq!(record.state, EnforcementState::Reversed);
         assert!(record.reversed_at.is_some());
-        
+
         // Cannot reverse again
         assert!(record.reverse().is_err());
-        
+
         // Test with an action that doesn't need reversal
-        let mut record = EnforcementRecord::new(
-            "warning-123",
-            12345,
-            67890,
-            EnforcementAction::kick(0),
-        );
-        
+        let mut record =
+            EnforcementRecord::new("warning-123", 12345, 67890, EnforcementAction::kick(0));
+
         // Execute should transition directly to Completed
         record.execute().unwrap();
         assert_eq!(record.state, EnforcementState::Completed);
         assert!(record.executed);
         assert!(record.executed_at.is_some());
         assert!(record.reverse_at.is_none());
-        
+
         // Cannot reverse a completed enforcement
         assert!(record.reverse().is_err());
     }
-    
+
     #[test]
     fn test_cancellation() {
         // Test cancelling a pending enforcement
-        let mut record = EnforcementRecord::new(
-            "warning-123",
-            12345,
-            67890,
-            EnforcementAction::mute(300),
-        );
-        
+        let mut record =
+            EnforcementRecord::new("warning-123", 12345, 67890, EnforcementAction::mute(300));
+
         record.cancel().unwrap();
         assert_eq!(record.state, EnforcementState::Cancelled);
-        
+
         // Cannot execute a cancelled enforcement
         assert!(record.execute().is_err());
-        
+
         // Test cancelling an active enforcement
-        let mut record = EnforcementRecord::new(
-            "warning-123",
-            12345,
-            67890,
-            EnforcementAction::mute(300),
-        );
-        
+        let mut record =
+            EnforcementRecord::new("warning-123", 12345, 67890, EnforcementAction::mute(300));
+
         record.execute().unwrap();
         assert_eq!(record.state, EnforcementState::Active);
-        
+
         record.cancel().unwrap();
         assert_eq!(record.state, EnforcementState::Cancelled);
-        
+
         // Cannot reverse a cancelled enforcement
         assert!(record.reverse().is_err());
     }
-    
+
     #[test]
     fn test_due_for_execution_or_reversal() {
         // Test a record that's due for execution
         let past = Utc::now() - Duration::seconds(10);
-        let mut record = EnforcementRecord::new(
-            "warning-123",
-            12345,
-            67890,
-            EnforcementAction::mute(300),
-        );
+        let mut record =
+            EnforcementRecord::new("warning-123", 12345, 67890, EnforcementAction::mute(300));
         record.execute_at = past;
-        
+
         assert!(record.is_due_for_execution());
         assert!(!record.is_due_for_reversal());
-        
+
         // Execute and test for reversal
         record.execute().unwrap();
         assert!(!record.is_due_for_execution());
         assert!(!record.is_due_for_reversal()); // Not due yet
-        
+
         // Make it due for reversal
         record.reverse_at = Some(past);
         assert!(record.is_due_for_reversal());
-        
+
         // Reverse and test neither should be true
         record.reverse().unwrap();
         assert!(!record.is_due_for_execution());
         assert!(!record.is_due_for_reversal());
     }
-    
+
     #[test]
     fn test_calculate_execute_time() {
         let now = Utc::now();
-        
+
         // Immediate actions
         let action = EnforcementAction::mute(300);
         let time = EnforcementRecord::calculate_execute_time(&action);
         assert!(time <= Utc::now());
-        
+
         // Delayed actions
         let action = EnforcementAction::kick(60);
         let time = EnforcementRecord::calculate_execute_time(&action);
         assert!(time > now);
         let diff = time - now;
         assert!(diff.num_seconds() >= 59 && diff.num_seconds() <= 61);
-        
+
         let action = EnforcementAction::voice_disconnect(30);
         let time = EnforcementRecord::calculate_execute_time(&action);
         assert!(time > now);

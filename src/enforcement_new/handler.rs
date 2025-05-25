@@ -3,14 +3,13 @@
 //! This module defines the handlers for different enforcement action types.
 
 use crate::enforcement_new::{
-    ActionParams, EnforcementAction, EnforcementActionType, EnforcementError, EnforcementResult, HauntParams
+    EnforcementAction, EnforcementActionType, EnforcementError, EnforcementResult,
 };
+use poise::serenity_prelude::{GuildId, Http, UserId, builder::EditMember};
+use rand::Rng;
+use serenity::all::{CacheHttp, ChannelId};
 use std::collections::HashMap;
 use std::sync::Arc;
-use async_trait::async_trait;
-use poise::serenity_prelude::{GuildId, Http, UserId, builder::EditMember};
-use serenity::all::{CacheHttp, ChannelId};
-use rand::Rng;
 use tracing::{error, info, warn};
 
 /// Trait for handling enforcement actions
@@ -24,7 +23,7 @@ pub trait ActionHandler: Send + Sync {
         user_id: UserId,
         action: &EnforcementAction,
     ) -> EnforcementResult<()>;
-    
+
     /// Reverse the action (if applicable)
     async fn reverse(
         &self,
@@ -40,36 +39,57 @@ pub struct ActionHandlerRegistry {
     handlers: HashMap<EnforcementActionType, Box<dyn ActionHandler>>,
 }
 
+impl Default for ActionHandlerRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ActionHandlerRegistry {
     /// Create a new registry with all handlers registered
     pub fn new() -> Self {
         let mut registry = Self {
             handlers: HashMap::new(),
         };
-        
+
         // Register handlers
         registry.register(EnforcementActionType::None, Box::new(NoopHandler));
         registry.register(EnforcementActionType::Mute, Box::new(MuteHandler));
         registry.register(EnforcementActionType::Ban, Box::new(BanHandler));
         registry.register(EnforcementActionType::Kick, Box::new(KickHandler));
         registry.register(EnforcementActionType::VoiceMute, Box::new(VoiceMuteHandler));
-        registry.register(EnforcementActionType::VoiceDeafen, Box::new(VoiceDeafenHandler));
-        registry.register(EnforcementActionType::VoiceDisconnect, Box::new(VoiceDisconnectHandler));
-        registry.register(EnforcementActionType::VoiceChannelHaunt, Box::new(VoiceChannelHauntHandler));
-        
+        registry.register(
+            EnforcementActionType::VoiceDeafen,
+            Box::new(VoiceDeafenHandler),
+        );
+        registry.register(
+            EnforcementActionType::VoiceDisconnect,
+            Box::new(VoiceDisconnectHandler),
+        );
+        registry.register(
+            EnforcementActionType::VoiceChannelHaunt,
+            Box::new(VoiceChannelHauntHandler),
+        );
+
         registry
     }
-    
+
     /// Register a handler for an action type
-    pub fn register(&mut self, action_type: EnforcementActionType, handler: Box<dyn ActionHandler>) {
+    pub fn register(
+        &mut self,
+        action_type: EnforcementActionType,
+        handler: Box<dyn ActionHandler>,
+    ) {
         self.handlers.insert(action_type, handler);
     }
-    
+
     /// Get a handler for an action type
     pub fn get(&self, action_type: EnforcementActionType) -> Option<&dyn ActionHandler> {
-        self.handlers.get(&action_type).map(|handler| handler.as_ref())
+        self.handlers
+            .get(&action_type)
+            .map(|handler| handler.as_ref())
     }
-    
+
     /// Execute an action
     pub async fn execute(
         &self,
@@ -87,7 +107,7 @@ impl ActionHandlerRegistry {
             )))
         }
     }
-    
+
     /// Reverse an action
     pub async fn reverse(
         &self,
@@ -113,20 +133,16 @@ pub async fn get_guild_and_member(
     guild_id: GuildId,
     user_id: UserId,
 ) -> EnforcementResult<(serenity::all::PartialGuild, serenity::all::Member)> {
-    let guild = guild_id
-        .to_partial_guild(http)
-        .await
-        .map_err(|e| EnforcementError::GuildOrMemberNotFound(format!(
-            "Failed to get guild {guild_id}: {e}"
-        )))?;
-        
-    let member = guild
-        .member(http, user_id)
-        .await
-        .map_err(|e| EnforcementError::GuildOrMemberNotFound(format!(
+    let guild = guild_id.to_partial_guild(http).await.map_err(|e| {
+        EnforcementError::GuildOrMemberNotFound(format!("Failed to get guild {guild_id}: {e}"))
+    })?;
+
+    let member = guild.member(http, user_id).await.map_err(|e| {
+        EnforcementError::GuildOrMemberNotFound(format!(
             "Failed to get member {user_id} in guild {guild_id}: {e}"
-        )))?;
-        
+        ))
+    })?;
+
     Ok((guild, member))
 }
 
@@ -145,7 +161,7 @@ impl ActionHandler for NoopHandler {
         info!("No-op action executed for user {user_id} in guild {guild_id}");
         Ok(())
     }
-    
+
     async fn reverse(
         &self,
         _http: &Http,
@@ -171,29 +187,32 @@ impl ActionHandler for MuteHandler {
         action: &EnforcementAction,
     ) -> EnforcementResult<()> {
         if let EnforcementAction::Mute(params) = action {
-            info!("Muting user {user_id} in guild {guild_id} for {:?} seconds", params.duration);
-            
+            info!(
+                "Muting user {user_id} in guild {guild_id} for {:?} seconds",
+                params.duration
+            );
+
             let (_, mut member) = get_guild_and_member(http, guild_id, user_id).await?;
-            
+
             #[allow(clippy::cast_possible_wrap)]
-            let timeout_until = chrono::Utc::now() 
-                + chrono::Duration::seconds(params.duration_or_default() as i64);
-            
+            let timeout_until =
+                chrono::Utc::now() + chrono::Duration::seconds(params.duration_or_default() as i64);
+
             member
                 .disable_communication_until_datetime(http, timeout_until.into())
                 .await
-                .map_err(|e| EnforcementError::DiscordApi(e))?;
-                
+                .map_err(|e| EnforcementError::DiscordApi(Box::new(e)))?;
+
             info!("Successfully muted user {user_id} until {timeout_until}");
         } else {
             return Err(EnforcementError::ValidationFailed(
-                "Expected Mute action".to_string()
+                "Expected Mute action".to_string(),
             ));
         }
-        
+
         Ok(())
     }
-    
+
     async fn reverse(
         &self,
         _http: &Http,
@@ -220,27 +239,33 @@ impl ActionHandler for BanHandler {
         action: &EnforcementAction,
     ) -> EnforcementResult<()> {
         if let EnforcementAction::Ban(params) = action {
-            info!("Banning user {user_id} in guild {guild_id} for {:?} seconds", params.duration);
-            
-            let reason = params.reason.clone().unwrap_or_else(|| 
-                format!("Temporary ban from warning system for {} seconds", params.duration_or_default())
+            info!(
+                "Banning user {user_id} in guild {guild_id} for {:?} seconds",
+                params.duration
             );
-            
+
+            let reason = params.reason.clone().unwrap_or_else(|| {
+                format!(
+                    "Temporary ban from warning system for {} seconds",
+                    params.duration_or_default()
+                )
+            });
+
             guild_id
                 .ban_with_reason(http, user_id, 7, &reason)
                 .await
-                .map_err(|e| EnforcementError::DiscordApi(e))?;
-                
+                .map_err(EnforcementError::from)?;
+
             info!("Successfully banned user {user_id}");
         } else {
             return Err(EnforcementError::ValidationFailed(
-                "Expected Ban action".to_string()
+                "Expected Ban action".to_string(),
             ));
         }
-        
+
         Ok(())
     }
-    
+
     async fn reverse(
         &self,
         http: &Http,
@@ -249,12 +274,12 @@ impl ActionHandler for BanHandler {
         _action: &EnforcementAction,
     ) -> EnforcementResult<()> {
         info!("Unbanning user {user_id} in guild {guild_id}");
-        
+
         guild_id
             .unban(http, user_id)
             .await
-            .map_err(|e| EnforcementError::DiscordApi(e))?;
-            
+            .map_err(EnforcementError::from)?;
+
         info!("Successfully unbanned user {user_id}");
         Ok(())
     }
@@ -274,28 +299,29 @@ impl ActionHandler for KickHandler {
     ) -> EnforcementResult<()> {
         if let EnforcementAction::Kick(params) = action {
             info!("Kicking user {user_id} from guild {guild_id}");
-            
+
             let (_, member) = get_guild_and_member(http, guild_id, user_id).await?;
-            
-            let reason = params.reason.clone().unwrap_or_else(|| 
-                "Kicked by warning system".to_string()
-            );
-            
+
+            let reason = params
+                .reason
+                .clone()
+                .unwrap_or_else(|| "Kicked by warning system".to_string());
+
             member
                 .kick_with_reason(http, &reason)
                 .await
-                .map_err(|e| EnforcementError::DiscordApi(e))?;
-                
+                .map_err(EnforcementError::from)?;
+
             info!("Successfully kicked user {user_id}");
         } else {
             return Err(EnforcementError::ValidationFailed(
-                "Expected Kick action".to_string()
+                "Expected Kick action".to_string(),
             ));
         }
-        
+
         Ok(())
     }
-    
+
     async fn reverse(
         &self,
         _http: &Http,
@@ -322,25 +348,28 @@ impl ActionHandler for VoiceMuteHandler {
         action: &EnforcementAction,
     ) -> EnforcementResult<()> {
         if let EnforcementAction::VoiceMute(params) = action {
-            info!("Voice muting user {user_id} in guild {guild_id} for {:?} seconds", params.duration);
-            
+            info!(
+                "Voice muting user {user_id} in guild {guild_id} for {:?} seconds",
+                params.duration
+            );
+
             let (_, mut member) = get_guild_and_member(http, guild_id, user_id).await?;
-            
+
             member
                 .edit(http, EditMember::new().mute(true))
                 .await
-                .map_err(|e| EnforcementError::DiscordApi(e))?;
-                
+                .map_err(EnforcementError::from)?;
+
             info!("Successfully voice muted user {user_id}");
         } else {
             return Err(EnforcementError::ValidationFailed(
-                "Expected VoiceMute action".to_string()
+                "Expected VoiceMute action".to_string(),
             ));
         }
-        
+
         Ok(())
     }
-    
+
     async fn reverse(
         &self,
         http: &Http,
@@ -349,19 +378,19 @@ impl ActionHandler for VoiceMuteHandler {
         _action: &EnforcementAction,
     ) -> EnforcementResult<()> {
         info!("Voice mute period expired for user {user_id} in guild {guild_id}");
-        
+
         if let Ok((_, mut member)) = get_guild_and_member(http, guild_id, user_id).await {
             member
                 .edit(http, EditMember::new().mute(false))
                 .await
-                .map_err(|e| EnforcementError::DiscordApi(e))?;
-                
+                .map_err(EnforcementError::from)?;
+
             info!("Successfully removed voice mute from user {user_id}");
         } else {
             warn!("User {user_id} not found in guild {guild_id} for voice mute reversal");
             // Don't return an error since the user might have left the guild
         }
-        
+
         Ok(())
     }
 }
@@ -379,25 +408,28 @@ impl ActionHandler for VoiceDeafenHandler {
         action: &EnforcementAction,
     ) -> EnforcementResult<()> {
         if let EnforcementAction::VoiceDeafen(params) = action {
-            info!("Voice deafening user {user_id} in guild {guild_id} for {:?} seconds", params.duration);
-            
+            info!(
+                "Voice deafening user {user_id} in guild {guild_id} for {:?} seconds",
+                params.duration
+            );
+
             let (_, mut member) = get_guild_and_member(http, guild_id, user_id).await?;
-            
+
             member
                 .edit(http, EditMember::new().deafen(true))
                 .await
-                .map_err(|e| EnforcementError::DiscordApi(e))?;
-                
+                .map_err(EnforcementError::from)?;
+
             info!("Successfully voice deafened user {user_id}");
         } else {
             return Err(EnforcementError::ValidationFailed(
-                "Expected VoiceDeafen action".to_string()
+                "Expected VoiceDeafen action".to_string(),
             ));
         }
-        
+
         Ok(())
     }
-    
+
     async fn reverse(
         &self,
         http: &Http,
@@ -406,19 +438,19 @@ impl ActionHandler for VoiceDeafenHandler {
         _action: &EnforcementAction,
     ) -> EnforcementResult<()> {
         info!("Voice deafen period expired for user {user_id} in guild {guild_id}");
-        
+
         if let Ok((_, mut member)) = get_guild_and_member(http, guild_id, user_id).await {
             member
                 .edit(http, EditMember::new().deafen(false))
                 .await
-                .map_err(|e| EnforcementError::DiscordApi(e))?;
-                
+                .map_err(EnforcementError::from)?;
+
             info!("Successfully removed voice deafen from user {user_id}");
         } else {
             warn!("User {user_id} not found in guild {guild_id} for voice deafen reversal");
             // Don't return an error since the user might have left the guild
         }
-        
+
         Ok(())
     }
 }
@@ -436,19 +468,19 @@ impl ActionHandler for VoiceDisconnectHandler {
         _action: &EnforcementAction,
     ) -> EnforcementResult<()> {
         info!("Disconnecting user {user_id} from voice in guild {guild_id}");
-        
+
         let (_, member) = get_guild_and_member(http, guild_id, user_id).await?;
-        
+
         member
             .disconnect_from_voice(http)
             .await
-            .map_err(|e| EnforcementError::DiscordApi(e))?;
-            
+            .map_err(EnforcementError::from)?;
+
         info!("Successfully disconnected user {user_id} from voice");
-        
+
         Ok(())
     }
-    
+
     async fn reverse(
         &self,
         _http: &Http,
@@ -457,7 +489,9 @@ impl ActionHandler for VoiceDisconnectHandler {
         _action: &EnforcementAction,
     ) -> EnforcementResult<()> {
         // Voice disconnects can't be reversed
-        info!("Voice disconnect action doesn't need reversal for user {user_id} in guild {guild_id}");
+        info!(
+            "Voice disconnect action doesn't need reversal for user {user_id} in guild {guild_id}"
+        );
         Ok(())
     }
 }
@@ -476,72 +510,68 @@ impl ActionHandler for VoiceChannelHauntHandler {
     ) -> EnforcementResult<()> {
         if let EnforcementAction::VoiceChannelHaunt(params) = action {
             info!("Beginning voice channel haunting for user {user_id} in guild {guild_id}");
-            
+
             // Get guild
             let (guild, _) = get_guild_and_member(http, guild_id, user_id).await?;
-            
+
             // Find the user's current voice channel
             let current_voice_channel = get_user_voice_channel(http, guild_id, user_id).await?;
-            
+
             // Get all voice channels in the guild
             let voice_channels = get_guild_voice_channels(http, &guild).await?;
-            
+
             if voice_channels.is_empty() {
                 return Err(EnforcementError::NoVoiceChannels(guild_id.get()));
             }
-            
+
             // Store the original channel ID if it's not already set
-            let original_id = params.original_channel_id.unwrap_or(current_voice_channel.get());
-            
+            let original_id = params
+                .original_channel_id
+                .unwrap_or(current_voice_channel.get());
+
             // Get parameters
             let teleport_count = params.teleport_count_or_default();
             let delay_seconds = params.interval_or_default();
             let return_to_original = params.return_to_origin_or_default();
-            
+
             // Execute the haunting
             let http_arc = Arc::new(http);
             let mut failed = false;
-            
+
             for i in 0..teleport_count {
                 if failed {
                     break;
                 }
-                
+
                 // Pick a random channel (different from current on first teleport)
                 let random_channel =
                     select_random_voice_channel(&voice_channels, i == 0, current_voice_channel);
-                
+
                 // Move the user to the random channel
-                failed = !teleport_user(
-                    &http_arc.clone(),
-                    guild_id,
-                    user_id,
-                    random_channel,
-                )
-                .await;
-                
+                failed = !teleport_user(&http_arc.clone(), guild_id, user_id, random_channel).await;
+
                 // Wait before the next teleport if we haven't failed
                 if !failed && i < teleport_count - 1 {
                     tokio::time::sleep(tokio::time::Duration::from_secs(delay_seconds)).await;
                 }
             }
-            
+
             // Return the user to their original channel if specified and we haven't failed
             if return_to_original && !failed {
                 let original_channel = ChannelId::new(original_id);
                 teleport_user(&http_arc, guild_id, user_id, original_channel).await;
             }
-            
+
             info!("Voice channel haunting completed for user {user_id}");
         } else {
             return Err(EnforcementError::ValidationFailed(
-                "Expected VoiceChannelHaunt action".to_string()
+                "Expected VoiceChannelHaunt action".to_string(),
             ));
         }
-        
+
         Ok(())
     }
-    
+
     async fn reverse(
         &self,
         _http: &Http,
@@ -550,7 +580,9 @@ impl ActionHandler for VoiceChannelHauntHandler {
         _action: &EnforcementAction,
     ) -> EnforcementResult<()> {
         // Voice channel haunting doesn't need reversal
-        info!("Voice channel haunting doesn't need reversal for user {user_id} in guild {guild_id}");
+        info!(
+            "Voice channel haunting doesn't need reversal for user {user_id} in guild {guild_id}"
+        );
         Ok(())
     }
 }
@@ -565,21 +597,21 @@ async fn get_user_voice_channel(
     if let Ok(guild) = guild_id.to_partial_guild(http).await {
         // Get voice channels
         let voice_channels = get_guild_voice_channels(http, &guild).await?;
-        
+
         for channel_id in voice_channels {
             if let Ok(channel) = channel_id.to_channel(http.http()).await {
                 let guild_channel = channel.guild().ok_or_else(|| {
                     EnforcementError::ValidationFailed("Failed to get guild channel".to_string())
                 })?;
-                
+
                 let members_result = http.cache().map(|cache| {
                     guild_channel
                         .members(cache)
                         .map(|members| members.iter().any(|member| member.user.id == user_id))
                 });
-                
+
                 let is_in_channel = members_result.unwrap_or_else(|| Ok(false)).unwrap_or(false);
-                
+
                 if is_in_channel {
                     // User found in this channel
                     info!("User {user_id} is in voice channel {channel_id}");
@@ -587,7 +619,7 @@ async fn get_user_voice_channel(
                 }
             }
         }
-        
+
         Err(EnforcementError::NotInVoiceChannel)
     } else {
         Err(EnforcementError::GuildOrMemberNotFound(format!(
@@ -601,10 +633,8 @@ async fn get_guild_voice_channels(
     http: &Http,
     guild: &serenity::all::PartialGuild,
 ) -> EnforcementResult<Vec<ChannelId>> {
-    let channels = guild.channels(http).await.map_err(|e| {
-        EnforcementError::DiscordApi(e)
-    })?;
-    
+    let channels = guild.channels(http).await.map_err(EnforcementError::from)?;
+
     let voice_channels = channels
         .iter()
         .filter_map(|(id, channel)| {
@@ -615,7 +645,7 @@ async fn get_guild_voice_channels(
             }
         })
         .collect::<Vec<_>>();
-    
+
     Ok(voice_channels)
 }
 
@@ -635,7 +665,7 @@ fn select_random_voice_channel(
         loop {
             let idx = rng.gen_range(0..voice_channels.len());
             let channel = voice_channels[idx];
-            
+
             if channel != current_channel {
                 return channel;
             }
