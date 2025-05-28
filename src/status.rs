@@ -422,10 +422,9 @@ pub fn format_active_channels(bot_status: &BotStatus, data: &Data) -> String {
             let guild_name = data
                 .cache
                 .guild(channel.guild_id)
-                .map(|g| g.name.clone())
-                .unwrap_or_else(|| format!("Guild {}", channel.guild_id));
+                .map_or_else(|| format!("Guild {}", channel.guild_id), |g| g.name.clone());
 
-            result.push_str(&format!("\n### {guild_name}\n"));
+            let _ = writeln!(result, "\n### {guild_name}");
         }
 
         // Build status indicators
@@ -438,21 +437,22 @@ pub fn format_active_channels(bot_status: &BotStatus, data: &Data) -> String {
         };
 
         // Add channel info
-        result.push_str(&format!(
-            "- {status_indicator} **{}**: {} users",
-            channel.name,
-            channel.users.len()
-        ));
+        let _ = writeln!(
+            result,
+            "- {status_indicator} **{}** (ID: {})",
+            channel.name, channel.channel_id
+        );
 
         // Add warning/enforcement counts if any
         if channel.warned_user_count > 0 || channel.enforced_user_count > 0 {
-            result.push_str(&format!(
+            let _ = writeln!(result,
                 " ({} warned, {} enforced)",
-                channel.warned_user_count, channel.enforced_user_count
-            ));
+                channel.warned_user_count, channel.enforced_user_count,
+            );
         }
 
         result.push('\n');
+        let _ = writeln!(result);
     }
 
     result

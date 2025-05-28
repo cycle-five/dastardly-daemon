@@ -132,6 +132,7 @@ impl EnforcementStore {
     }
 
     /// Get active enforcements for a user in a guild
+    #[must_use]
     pub fn get_active_for_user(&self, user_id: u64, guild_id: u64) -> Vec<EnforcementRecord> {
         self.records
             .iter()
@@ -217,6 +218,7 @@ impl EnforcementStore {
     }
 
     /// Cancel all pending enforcements for a user in a guild
+    #[must_use]
     pub fn cancel_all_for_user(&self, user_id: u64, guild_id: u64) -> Vec<EnforcementRecord> {
         let mut cancelled = Vec::new();
 
