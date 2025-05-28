@@ -7,6 +7,7 @@ use crate::{
 type Error = Box<dyn std::error::Error + Send + Sync>;
 use ::serenity::all::CacheHttp;
 use chrono::{DateTime, Duration, Utc};
+use poise::samples::paginate;
 use poise::serenity_prelude as serenity;
 use poise::serenity_prelude::{Colour, CreateEmbed, CreateMessage, Mentionable, Timestamp, User};
 use poise::{Context, command};
@@ -1098,47 +1099,34 @@ pub async fn daemon_status(ctx: Context<'_, Data, Error>) -> Result<(), Error> {
     // Generate complete status report
     let status_text = format_complete_status(&status, ctx.data(), &cache_http).await;
 
-    // Split into chunks if needed (Discord has a 2000 character limit)
-    if status_text.len() <= 1900 {
-        ctx.say(status_text).await?;
-    } else {
-        // Split into smaller chunks
-        let mut chunks = Vec::new();
-        let mut current_chunk = String::new();
+    // Split into smaller chunks
+    let mut chunks = Vec::new();
+    let mut current_chunk = String::new();
 
-        for line in status_text.lines() {
-            if current_chunk.len() + line.len() + 1 > 1900 {
-                // This line would make the chunk too big, start a new one
-                chunks.push(current_chunk);
-                current_chunk = line.to_string();
-            } else {
-                if !current_chunk.is_empty() {
-                    current_chunk.push('\n');
-                }
-                current_chunk.push_str(line);
-            }
-        }
-
-        // Add the last chunk if non-empty
-        if !current_chunk.is_empty() {
+    for line in status_text.lines() {
+        if current_chunk.len() + line.len() + 1 > 1900 {
+            // This line would make the chunk too big, start a new one
             chunks.push(current_chunk);
-        }
-
-        // Send chunks
-        for (i, chunk) in chunks.iter().enumerate() {
-            let msg = if chunks.len() > 1 {
-                format!(
-                    "**Status Report (Part {}/{})**\n{}",
-                    i + 1,
-                    chunks.len(),
-                    chunk
-                )
-            } else {
-                chunk.to_string()
-            };
-            ctx.say(msg).await?;
+            current_chunk = line.to_string();
+        } else {
+            if !current_chunk.is_empty() {
+                current_chunk.push('\n');
+            }
+            current_chunk.push_str(line);
         }
     }
+
+    // Add the last chunk if non-empty
+    if !current_chunk.is_empty() {
+        chunks.push(current_chunk);
+    }
+
+    let slice = chunks
+        .iter()
+        .map(|chunk| chunk.as_str())
+        .collect::<Vec<_>>();
+
+    let () = paginate(ctx, slice.as_slice()).await?;
     Ok(())
 }
 
