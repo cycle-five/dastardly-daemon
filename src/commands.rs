@@ -444,7 +444,7 @@ pub async fn warn(
     #[description = "Action to take (mute, ban, kick, voicemute, voicedeafen, voicedisconnect)"]
     action: Option<String>,
     #[description = "Duration in minutes for mute/ban/voicemute/voicedeafen, delay for kick/voicedisconnect"]
-    duration_minutes: Option<u64>,
+    duration_minutes: Option<u32>,
 ) -> Result<(), Error> {
     // Show deprecation notice
     ctx.say("⚠️ This command is deprecated. Please use `/summon_daemon` instead for improved functionality.").await?;

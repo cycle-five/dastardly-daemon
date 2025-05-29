@@ -25,6 +25,7 @@ impl Default for EnforcementStore {
 #[allow(unused)]
 impl EnforcementStore {
     /// Create a new enforcement store
+    #[must_use]
     pub fn new() -> Self {
         Self {
             records: Arc::new(DashMap::new()),
@@ -38,6 +39,7 @@ impl EnforcementStore {
     }
 
     /// Get an enforcement record by ID
+    #[must_use]
     pub fn get(
         &self,
         id: &str,
@@ -46,6 +48,7 @@ impl EnforcementStore {
     }
 
     /// Get a mutable reference to an enforcement record by ID
+    #[must_use]
     pub fn get_mut(
         &self,
         id: &str,
@@ -54,16 +57,19 @@ impl EnforcementStore {
     }
 
     /// Remove an enforcement record by ID
+    #[must_use]
     pub fn remove(&self, id: &str) -> Option<(String, EnforcementRecord)> {
         self.records.remove(id)
     }
 
     /// Get all enforcement records
+    #[must_use]
     pub fn get_all(&self) -> Vec<EnforcementRecord> {
         self.records.iter().map(|e| e.value().clone()).collect()
     }
 
     /// Get pending enforcements due for execution
+    #[must_use]
     pub fn get_pending_for_execution(&self) -> Vec<String> {
         let now = Utc::now();
         self.records
@@ -80,6 +86,7 @@ impl EnforcementStore {
     }
 
     /// Get active enforcements due for reversal
+    #[must_use]
     pub fn get_active_for_reversal(&self) -> Vec<String> {
         let now = Utc::now();
         self.records
@@ -87,8 +94,7 @@ impl EnforcementStore {
             .filter_map(|entry| {
                 let record = entry.value();
                 if record.state == EnforcementState::Active
-                    && record.reverse_at.is_some()
-                    && record.reverse_at.unwrap() <= now
+                    && record.reverse_at.is_some_and(|reverse_at| reverse_at > now)
                 {
                     Some(record.id.clone())
                 } else {
@@ -99,6 +105,7 @@ impl EnforcementStore {
     }
 
     /// Get all enforcements for a user in a guild
+    #[must_use]
     pub fn get_for_user(&self, user_id: u64, guild_id: u64) -> Vec<EnforcementRecord> {
         self.records
             .iter()
@@ -114,6 +121,7 @@ impl EnforcementStore {
     }
 
     /// Get pending enforcements for a user in a guild
+    #[must_use]
     pub fn get_pending_for_user(&self, user_id: u64, guild_id: u64) -> Vec<EnforcementRecord> {
         self.records
             .iter()
@@ -151,6 +159,7 @@ impl EnforcementStore {
     }
 
     /// Get all enforcements by state
+    #[must_use]
     pub fn get_by_state(&self, state: EnforcementState) -> Vec<EnforcementRecord> {
         self.records
             .iter()
@@ -190,6 +199,13 @@ impl EnforcementStore {
     }
 
     /// Reverse an enforcement by ID
+    ///
+    /// # Errors
+    ///
+    /// Returns an error in the following cases:
+    /// - If no enforcement record is found with the provided `id`, returns `EnforcementError::NotFound`.
+    /// - If the enforcement record's state is not `Pending`, returns `EnforcementError::InvalidStateTransition`.
+    /// - If the execution of the enforcement record fails, returns the appropriate `EnforcementError` from that call.
     pub fn reverse_enforcement(&self, id: &str) -> EnforcementResult<EnforcementRecord> {
         if let Some(mut record) = self.get_mut(id) {
             if record.state != EnforcementState::Active {
@@ -207,6 +223,13 @@ impl EnforcementStore {
     }
 
     /// Cancel an enforcement by ID
+    ///
+    /// # Errors
+    ///
+    /// Returns an error in the following cases:
+    /// - If no enforcement record is found with the provided `id`, returns `EnforcementError::NotFound`.
+    /// - If the enforcement record's state is neither `Pending` nor `Active`, returns `EnforcementError::InvalidStateTransition`.
+    /// - If the cancellation of the enforcement record fails, returns the appropriate `EnforcementError` from that call.
     pub fn cancel_enforcement(&self, id: &str) -> EnforcementResult<EnforcementRecord> {
         if let Some(mut record) = self.get_mut(id) {
             if record.state != EnforcementState::Pending && record.state != EnforcementState::Active

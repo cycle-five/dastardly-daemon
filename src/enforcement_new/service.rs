@@ -33,6 +33,7 @@ impl Default for EnforcementService {
 #[allow(unused)]
 impl EnforcementService {
     /// Create a new enforcement service
+    #[must_use]
     pub fn new() -> Self {
         Self {
             store: EnforcementStore::new(),
@@ -47,6 +48,7 @@ impl EnforcementService {
     }
 
     /// Create a new enforcement channel and return the sender
+    #[must_use]
     pub fn create_enforcement_channel() -> Sender<EnforcementCheckRequest> {
         let (tx, rx) = mpsc::channel::<EnforcementCheckRequest>(100);
         let tx_clone = tx.clone();
@@ -59,6 +61,7 @@ impl EnforcementService {
     }
 
     /// Get the enforcement receiver if available
+    #[must_use]
     pub fn take_enforcement_receiver() -> Option<Receiver<EnforcementCheckRequest>> {
         ENFORCEMENT_RECEIVER.with(|cell| cell.borrow_mut().take())
     }
@@ -91,6 +94,11 @@ impl EnforcementService {
     }
 
     /// Process an enforcement - execute or reverse based on its current state
+    ///
+    /// # Errors
+    ///
+    /// Returns an error in the following cases:
+    /// - If no enforcement record is found with the provided `enforcement_id`, returns `EnforcementError::NotFound`.
     pub async fn process_enforcement(
         &self,
         http: &Http,
@@ -126,10 +134,9 @@ impl EnforcementService {
                     }
                 }
                 EnforcementState::Active => {
-                    if let Some(reverse_at) = {
-                        let record = self.store.get(&enforcement_id).unwrap();
-                        record.reverse_at
-                    } {
+                    if let Some(reverse_at) =
+                        { self.store.get(&enforcement_id).and_then(|r| r.reverse_at) }
+                    {
                         if reverse_at <= chrono::Utc::now() {
                             if let Ok(record) = self.store.reverse_enforcement(&enforcement_id) {
                                 let record_id = record.id.clone();
@@ -161,6 +168,11 @@ impl EnforcementService {
     }
 
     /// Cancel an enforcement
+    ///
+    /// # Errors
+    ///
+    /// Returns an error in the following cases:
+    /// - If no enforcement record is found with the provided `enforcement_id`, returns `EnforcementError::NotFound`.
     pub async fn cancel_enforcement(
         &self,
         http: &Http,
@@ -207,6 +219,11 @@ impl EnforcementService {
     }
 
     /// Cancel all enforcements for a user in a guild
+    ///
+    /// # Errors
+    ///
+    /// Returns an error in the following cases:
+    /// - This function currently does not return an error directly, but errors during the cancellation of individual enforcements are logged and do not prevent the operation from completing.
     pub async fn cancel_all_for_user(
         &self,
         http: &Http,
@@ -229,6 +246,11 @@ impl EnforcementService {
     }
 
     /// Check all enforcements
+    ///
+    /// # Errors
+    ///
+    /// Returns an error in the following cases:
+    /// - This function currently does not return an error directly, but errors during the processing of individual enforcements are logged and do not prevent the operation from completing.
     pub async fn check_all_enforcements(&self, http: &Http) -> EnforcementResult<()> {
         // Get all pending enforcements that need execution
         let pending_ids = self.store.get_pending_for_execution();
@@ -254,6 +276,11 @@ impl EnforcementService {
     }
 
     /// Check enforcements for a specific user in a guild
+    ///
+    /// # Errors
+    ///
+    /// Returns an error in the following cases:
+    /// - This function currently does not return an error directly, but errors during the processing of individual enforcements for the user are logged and do not prevent the operation from completing.
     pub async fn check_user_enforcements(
         &self,
         http: &Http,
@@ -294,6 +321,12 @@ impl EnforcementService {
     }
 
     /// Notify the enforcement task about a user
+    ///
+    /// # Errors
+    ///
+    /// Returns an error in the following cases:
+    /// - If no enforcement task channel is available, returns `EnforcementError::Other` with a message indicating the absence of the channel.
+    /// - If sending the user check request fails, returns `EnforcementError::Other` with a message detailing the failure.
     pub async fn notify_about_user(&self, user_id: u64, guild_id: u64) -> EnforcementResult<()> {
         if let Some(tx) = &*self.tx {
             if let Err(e) = tx
@@ -315,6 +348,12 @@ impl EnforcementService {
     }
 
     /// Notify the enforcement task about a specific enforcement
+    ///
+    /// # Errors
+    ///
+    /// Returns an error in the following cases:
+    /// - If no enforcement task channel is available, returns `EnforcementError::Other` with a message indicating the absence of the channel.
+    /// - If sending the enforcement check request fails, returns `EnforcementError::Other` with a message detailing the failure.
     pub async fn notify_about_enforcement(&self, enforcement_id: &str) -> EnforcementResult<()> {
         if let Some(tx) = &*self.tx {
             if let Err(e) = tx
@@ -338,6 +377,12 @@ impl EnforcementService {
     }
 
     /// Notify the enforcement task to check all enforcements
+    ///
+    /// # Errors
+    ///
+    /// Returns an error in the following cases:
+    /// - If no enforcement task channel is available, returns `EnforcementError::Other` with a message indicating the absence of the channel.
+    /// - If sending the check all request fails, returns `EnforcementError::Other` with a message detailing the failure.
     pub async fn notify_check_all(&self) -> EnforcementResult<()> {
         if let Some(tx) = &*self.tx {
             if let Err(e) = tx.send(EnforcementCheckRequest::CheckAll).await {
@@ -347,6 +392,7 @@ impl EnforcementService {
                 )));
             }
         } else {
+            error!("No enforcement task channel available");
             return Err(EnforcementError::Other(
                 "No enforcement task channel available".to_string(),
             ));

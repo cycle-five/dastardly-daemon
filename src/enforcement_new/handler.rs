@@ -194,9 +194,8 @@ impl ActionHandler for MuteHandler {
 
             let (_, mut member) = get_guild_and_member(http, guild_id, user_id).await?;
 
-            #[allow(clippy::cast_possible_wrap)]
-            let timeout_until =
-                chrono::Utc::now() + chrono::Duration::seconds(params.duration_or_default() as i64);
+            let timeout_until = chrono::Utc::now()
+                + chrono::Duration::seconds(i64::from(params.duration_or_default()));
 
             member
                 .disable_communication_until_datetime(http, timeout_until.into())
@@ -335,7 +334,7 @@ impl ActionHandler for KickHandler {
     }
 }
 
-/// Handler for the VoiceMute action type
+/// Handler for the `VoiceMute` action type
 struct VoiceMuteHandler;
 
 #[async_trait::async_trait]
@@ -395,7 +394,7 @@ impl ActionHandler for VoiceMuteHandler {
     }
 }
 
-/// Handler for the VoiceDeafen action type
+/// Handler for the `VoiceDeafen` action type
 struct VoiceDeafenHandler;
 
 #[async_trait::async_trait]
@@ -455,7 +454,7 @@ impl ActionHandler for VoiceDeafenHandler {
     }
 }
 
-/// Handler for the VoiceDisconnect action type
+/// Handler for the `VoiceDisconnect` action type
 struct VoiceDisconnectHandler;
 
 #[async_trait::async_trait]
@@ -496,7 +495,7 @@ impl ActionHandler for VoiceDisconnectHandler {
     }
 }
 
-/// Handler for the VoiceChannelHaunt action type
+/// Handler for the `VoiceChannelHaunt` action type
 struct VoiceChannelHauntHandler;
 
 #[async_trait::async_trait]
@@ -552,7 +551,8 @@ impl ActionHandler for VoiceChannelHauntHandler {
 
                 // Wait before the next teleport if we haven't failed
                 if !failed && i < teleport_count - 1 {
-                    tokio::time::sleep(tokio::time::Duration::from_secs(delay_seconds)).await;
+                    tokio::time::sleep(tokio::time::Duration::from_secs(delay_seconds.into()))
+                        .await;
                 }
             }
 

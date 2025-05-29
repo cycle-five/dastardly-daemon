@@ -192,20 +192,18 @@ impl BotStatus {
             .guild(guild_id)
             .and_then(|g| g.channels.get(&channel_id).cloned());
 
-        let channel_name = channel
-            .map(|c| c.name.clone())
-            .unwrap_or_else(|| format!("Channel {channel_id}"));
+        let channel_name =
+            channel.map_or_else(|| format!("Channel {channel_id}"), |c| c.name.clone());
         // Update voice channel status
-        let mut channel_status = self
-            .active_voice_channels
-            .get(&channel_id)
-            .map(|entry| entry.value().clone())
-            .unwrap_or_else(|| VoiceChannelStatus {
+        let mut channel_status = self.active_voice_channels.get(&channel_id).map_or_else(
+            || VoiceChannelStatus {
                 channel_id,
                 guild_id,
                 name: channel_name,
                 ..Default::default()
-            });
+            },
+            |entry| entry.value().clone(),
+        );
 
         channel_status.users.insert(user_id);
         channel_status.last_updated = now;
@@ -285,7 +283,10 @@ impl BotStatus {
         self.user_joined_voice(guild_id, new_channel_id, user_id, data);
     }
 
-    /// Recalculate statistics for a channel based on its current users
+    /// Recalculate statistics for a channel based on its current users.
+    ///
+    /// This function updates the warned and enforced user counts for the specified channel.
+    /// It operates entirely through side effects and does not return any value.
     fn recalculate_channel_stats(&self, channel_id: ChannelId) {
         if let Some(mut channel_status) = self.active_voice_channels.get_mut(&channel_id) {
             let mut warned_count = 0;
@@ -516,12 +517,11 @@ pub async fn format_problematic_users(
         };
 
         // Add user info with score
-        result.push_str(&format!(
+        let _ = writeln!(
+            result,
             "- {status} **{user_name}** (Score: {:.2}){channel_info}",
             user.warning_score
-        ));
-
-        result.push('\n');
+        );
     }
 
     result
@@ -583,7 +583,7 @@ pub fn format_enforcement_status(data: &Data) -> String {
             let user_name = data
                 .cache
                 .user(UserId::new(user_id))
-                .map_or_else(|| format!("User {user_id}"),|u| u.name.clone());
+                .map_or_else(|| format!("User {user_id}"), |u| u.name.clone());
 
             // Format the action in a more readable way
             let action_str = format_enforcement_action(&enforcement.action);

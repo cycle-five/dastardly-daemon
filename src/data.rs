@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     default::Default,
     fmt::{Display, Formatter},
     ops::{Deref, DerefMut},
@@ -373,7 +374,7 @@ impl Data {
 
         let now = chrono::Utc::now();
         let mut total_score = 0.0;
-        let mut unique_mods = std::collections::HashSet::new();
+        let mut unique_mods: HashSet<u64> = std::collections::HashSet::new();
 
         // Calculate score for each warning based on recency
         for (i, timestamp) in state.warning_timestamps.iter().enumerate() {
@@ -388,6 +389,7 @@ impl Data {
         }
 
         // Apply a bonus if multiple mods issued warnings (more credible reports)
+        #[allow(clippy::cast_precision_loss)]
         if unique_mods.len() > 1 {
             total_score += MOD_DIVERSITY_BONUS * (unique_mods.len() as f64 - 1.0);
         }
@@ -737,7 +739,7 @@ mod tests {
             warning_id: "warn-id".to_string(),
             user_id: 12345,
             guild_id: 11111,
-            action: EnforcementAction::ban(604800),
+            action: EnforcementAction::ban(604_800),
             execute_at: "2023-01-02T00:00:00Z"
                 .parse()
                 .expect("Failed to parse date"),
@@ -767,7 +769,7 @@ mod tests {
         assert_eq!(deserialized.warning_id, "warn-id");
         assert!(!deserialized.executed);
         if let EnforcementAction::Ban(params) = deserialized.action {
-            assert_eq!(params.duration, Some(604800));
+            assert_eq!(params.duration, Some(604_800));
         } else {
             panic!("Expected Ban enforcement");
         }

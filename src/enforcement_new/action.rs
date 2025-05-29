@@ -46,7 +46,7 @@ impl fmt::Display for EnforcementActionType {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ActionParams {
     /// Duration in seconds for timed actions, or delay for immediate actions
-    pub duration: Option<u64>,
+    pub duration: Option<u32>,
 
     /// Reason for the action (for audit logs)
     pub reason: Option<String>,
@@ -55,7 +55,7 @@ pub struct ActionParams {
 #[allow(unused)]
 impl ActionParams {
     /// Create new action parameters with the specified duration
-    pub fn new(duration: Option<u64>) -> Self {
+    pub fn new(duration: Option<u32>) -> Self {
         Self {
             duration,
             reason: None,
@@ -63,7 +63,7 @@ impl ActionParams {
     }
 
     /// Create new action parameters with the specified duration and reason
-    pub fn with_reason(duration: Option<u64>, reason: impl Into<String>) -> Self {
+    pub fn with_reason(duration: Option<u32>, reason: impl Into<String>) -> Self {
         Self {
             duration,
             reason: Some(reason.into()),
@@ -71,7 +71,7 @@ impl ActionParams {
     }
 
     /// Get the duration or a default value
-    pub fn duration_or_default(&self) -> u64 {
+    pub fn duration_or_default(&self) -> u32 {
         self.duration.unwrap_or(0)
     }
 
@@ -85,10 +85,10 @@ impl ActionParams {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct HauntParams {
     /// Number of times to teleport the user between channels
-    pub teleport_count: Option<u64>,
+    pub teleport_count: Option<u32>,
 
     /// Seconds between each teleport
-    pub interval: Option<u64>,
+    pub interval: Option<u32>,
 
     /// Whether to eventually return the user to their original channel
     pub return_to_origin: Option<bool>,
@@ -100,8 +100,8 @@ pub struct HauntParams {
 impl HauntParams {
     /// Create new haunting parameters
     pub fn new(
-        teleport_count: Option<u64>,
-        interval: Option<u64>,
+        teleport_count: Option<u32>,
+        interval: Option<u32>,
         return_to_origin: Option<bool>,
         original_channel_id: Option<u64>,
     ) -> Self {
@@ -114,12 +114,12 @@ impl HauntParams {
     }
 
     /// Get the teleport count or a default value
-    pub fn teleport_count_or_default(&self) -> u64 {
+    pub fn teleport_count_or_default(&self) -> u32 {
         self.teleport_count.unwrap_or(3)
     }
 
     /// Get the interval or a default value
-    pub fn interval_or_default(&self) -> u64 {
+    pub fn interval_or_default(&self) -> u32 {
         self.interval.unwrap_or(10)
     }
 
@@ -209,39 +209,39 @@ impl EnforcementAction {
     }
 
     /// Create a new Mute action
-    pub fn mute(duration: impl Into<Option<u64>>) -> Self {
+    pub fn mute(duration: impl Into<Option<u32>>) -> Self {
         Self::Mute(ActionParams::new(duration.into()))
     }
 
     /// Create a new Ban action
-    pub fn ban(duration: impl Into<Option<u64>>) -> Self {
+    pub fn ban(duration: impl Into<Option<u32>>) -> Self {
         Self::Ban(ActionParams::new(duration.into()))
     }
 
     /// Create a new Kick action
-    pub fn kick(delay: impl Into<Option<u64>>) -> Self {
+    pub fn kick(delay: impl Into<Option<u32>>) -> Self {
         Self::Kick(ActionParams::new(delay.into()))
     }
 
     /// Create a new VoiceMute action
-    pub fn voice_mute(duration: impl Into<Option<u64>>) -> Self {
+    pub fn voice_mute(duration: impl Into<Option<u32>>) -> Self {
         Self::VoiceMute(ActionParams::new(duration.into()))
     }
 
     /// Create a new VoiceDeafen action
-    pub fn voice_deafen(duration: impl Into<Option<u64>>) -> Self {
+    pub fn voice_deafen(duration: impl Into<Option<u32>>) -> Self {
         Self::VoiceDeafen(ActionParams::new(duration.into()))
     }
 
     /// Create a new VoiceDisconnect action
-    pub fn voice_disconnect(delay: impl Into<Option<u64>>) -> Self {
+    pub fn voice_disconnect(delay: impl Into<Option<u32>>) -> Self {
         Self::VoiceDisconnect(ActionParams::new(delay.into()))
     }
 
     /// Create a new VoiceChannelHaunt action
     pub fn voice_channel_haunt(
-        teleport_count: impl Into<Option<u64>>,
-        interval: impl Into<Option<u64>>,
+        teleport_count: impl Into<Option<u32>>,
+        interval: impl Into<Option<u32>>,
         return_to_origin: impl Into<Option<bool>>,
         original_channel_id: impl Into<Option<u64>>,
     ) -> Self {

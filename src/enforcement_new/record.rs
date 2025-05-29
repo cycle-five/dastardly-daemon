@@ -9,6 +9,8 @@ use serde::{Deserialize, Serialize};
 use tracing::info;
 use uuid::Uuid;
 
+use super::EnforcementResult;
+
 /// Enforcement action lifecycle states
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum EnforcementState {
@@ -71,6 +73,25 @@ pub struct EnforcementRecord {
     pub executed: bool,
 }
 
+impl Default for EnforcementRecord {
+    fn default() -> Self {
+        Self {
+            id: Uuid::new_v4().to_string(),
+            warning_id: String::new(),
+            user_id: 0,
+            guild_id: 0,
+            action: EnforcementAction::default(),
+            execute_at: Utc::now(),
+            reverse_at: None,
+            state: EnforcementState::Pending,
+            created_at: Utc::now(),
+            executed_at: None,
+            reversed_at: None,
+            executed: false,
+        }
+    }
+}
+
 impl EnforcementRecord {
     /// Create a new enforcement record
     pub fn new(
@@ -90,16 +111,14 @@ impl EnforcementRecord {
             guild_id,
             action,
             execute_at,
-            reverse_at: None, // Will be set when executed if needed
             state: EnforcementState::Pending,
             created_at: now,
-            executed_at: None,
-            reversed_at: None,
-            executed: false,
+            ..Default::default()
         }
     }
 
     /// Calculate the execution time for an action
+    #[must_use]
     pub fn calculate_execute_time(action: &EnforcementAction) -> DateTime<Utc> {
         let now = Utc::now();
 
@@ -107,7 +126,7 @@ impl EnforcementRecord {
             EnforcementAction::Kick(params) | EnforcementAction::VoiceDisconnect(params) => {
                 if let Some(delay) = params.duration {
                     if delay > 0 {
-                        return now + Duration::seconds(delay as i64);
+                        return now + Duration::seconds(i64::from(delay));
                     }
                 }
                 now
@@ -115,7 +134,7 @@ impl EnforcementRecord {
             EnforcementAction::VoiceChannelHaunt(params) => {
                 if let Some(interval) = params.interval {
                     if interval > 0 {
-                        return now + Duration::seconds(interval as i64);
+                        return now + Duration::seconds(i64::from(interval));
                     }
                 }
                 now
@@ -126,6 +145,7 @@ impl EnforcementRecord {
     }
 
     /// Calculate when an action should be reversed (if applicable)
+    #[must_use]
     pub fn calculate_reversal_time(&self) -> Option<DateTime<Utc>> {
         if !self.action.needs_reversal() {
             return None;
@@ -140,7 +160,7 @@ impl EnforcementRecord {
             | EnforcementAction::VoiceDeafen(params) => {
                 if let Some(duration) = params.duration {
                     if duration > 0 {
-                        return Some(now + Duration::seconds(duration as i64));
+                        return Some(now + Duration::seconds(i64::from(duration)));
                     }
                 }
                 None
@@ -151,7 +171,10 @@ impl EnforcementRecord {
     }
 
     /// Execute this enforcement, transitioning to Active or Completed
-    pub fn execute(&mut self) -> Result<(), EnforcementError> {
+    ///
+    /// # Errors
+    /// Returns an error if the record is not in the Pending state
+    pub fn execute(&mut self) -> EnforcementResult<()> {
         if self.state != EnforcementState::Pending {
             return Err(EnforcementError::InvalidStateTransition);
         }
@@ -182,7 +205,10 @@ impl EnforcementRecord {
     }
 
     /// Reverse this enforcement, transitioning to Reversed
-    pub fn reverse(&mut self) -> Result<(), EnforcementError> {
+    ///
+    /// # Errors
+    /// Returns an error if the record is not in the Active state
+    pub fn reverse(&mut self) -> EnforcementResult<()> {
         if self.state != EnforcementState::Active {
             return Err(EnforcementError::InvalidStateTransition);
         }
@@ -202,7 +228,10 @@ impl EnforcementRecord {
     }
 
     /// Cancel this enforcement, transitioning to Cancelled
-    pub fn cancel(&mut self) -> Result<(), EnforcementError> {
+    ///
+    /// # Errors
+    /// Returns an error if the record is not in the Pending or Active state
+    pub fn cancel(&mut self) -> EnforcementResult<()> {
         if self.state != EnforcementState::Pending && self.state != EnforcementState::Active {
             return Err(EnforcementError::InvalidStateTransition);
         }
@@ -221,15 +250,18 @@ impl EnforcementRecord {
     }
 
     /// Check if this enforcement is due for execution
+    #[must_use]
     pub fn is_due_for_execution(&self) -> bool {
         self.state == EnforcementState::Pending && self.execute_at <= Utc::now()
     }
 
     /// Check if this enforcement is due for reversal
+    #[must_use]
     pub fn is_due_for_reversal(&self) -> bool {
         self.state == EnforcementState::Active
-            && self.reverse_at.is_some()
-            && self.reverse_at.unwrap() <= Utc::now()
+            && self
+                .reverse_at
+                .is_some_and(|reverse_at| reverse_at <= Utc::now())
     }
 
     // /// Convert from old PendingEnforcement format (for backward compatibility)
