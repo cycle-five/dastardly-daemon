@@ -166,6 +166,13 @@ impl EnforcementStore {
     }
 
     /// Execute an enforcement by ID
+    ///
+    /// # Errors
+    ///
+    /// Returns an error in the following cases:
+    /// - If no enforcement record is found with the provided `id`, returns `EnforcementError::NotFound`.
+    /// - If the enforcement record's state is not `Pending`, returns `EnforcementError::InvalidStateTransition`.
+    /// - If the execution of the enforcement record fails, returns the appropriate `EnforcementError` from that call.
     pub fn execute_enforcement(&self, id: &str) -> EnforcementResult<EnforcementRecord> {
         if let Some(mut record) = self.get_mut(id) {
             if record.state != EnforcementState::Pending {

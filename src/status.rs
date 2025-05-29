@@ -445,7 +445,8 @@ pub fn format_active_channels(bot_status: &BotStatus, data: &Data) -> String {
 
         // Add warning/enforcement counts if any
         if channel.warned_user_count > 0 || channel.enforced_user_count > 0 {
-            let _ = writeln!(result,
+            let _ = writeln!(
+                result,
                 " ({} warned, {} enforced)",
                 channel.warned_user_count, channel.enforced_user_count,
             );
@@ -487,8 +488,7 @@ pub async fn format_problematic_users(
         let user_name = data
             .cache
             .user(user.user_id)
-            .map(|u| u.name.clone())
-            .unwrap_or_else(|| format!("User {}", user.user_id));
+            .map_or_else(|| format!("User {}", user.user_id), |u| u.name.clone());
 
         // Get channel name if user is in one
         let channel_info = if let Some(channel_id) = user.current_channel {
@@ -559,8 +559,7 @@ pub fn format_enforcement_status(data: &Data) -> String {
             let user_name = data
                 .cache
                 .user(UserId::new(user_id))
-                .map(|u| u.name.clone())
-                .unwrap_or_else(|| format!("User {user_id}"));
+                .map_or_else(|| format!("User {user_id}"), |u| u.name.clone());
 
             // Format the action in a more readable way
             let action_str = format_enforcement_action(&enforcement.action);
@@ -584,8 +583,7 @@ pub fn format_enforcement_status(data: &Data) -> String {
             let user_name = data
                 .cache
                 .user(UserId::new(user_id))
-                .map(|u| u.name.clone())
-                .unwrap_or_else(|| format!("User {user_id}"));
+                .map_or_else(|| format!("User {user_id}"),|u| u.name.clone());
 
             // Format the action in a more readable way
             let action_str = format_enforcement_action(&enforcement.action);
