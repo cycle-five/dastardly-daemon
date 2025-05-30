@@ -238,7 +238,7 @@ impl EnforcementAction {
         Self::VoiceDisconnect(ActionParams::new(delay.into()))
     }
 
-    /// Create a new VoiceChannelHaunt action
+    /// Create a new `VoiceChannelHaunt` action
     pub fn voice_channel_haunt(
         teleport_count: impl Into<Option<u32>>,
         interval: impl Into<Option<u32>>,

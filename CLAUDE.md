@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Test all: `cargo test`
 - Test specific: `cargo test <test_name>`
 - Example: `cargo test test_data_new`
-- Lint: `cargo clippy`
+- Lint: `cargo clippy -- -D clippy::all -D warnings -W clippy::pedantic`
 - Format: `cargo fmt`
 
 ## Code Style Guidelines

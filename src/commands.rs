@@ -786,9 +786,9 @@ pub async fn chaos_ritual(
     slash_command,
     guild_only,
     ephemeral,
-    required_permissions = "KICK_MEMBERS|BAN_MEMBERS|MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS",
-    required_bot_permissions = "KICK_MEMBERS|BAN_MEMBERS|MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS",
-    default_member_permissions = "KICK_MEMBERS|BAN_MEMBERS|MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS"
+    required_permissions = "MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS",
+    required_bot_permissions = "MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS",
+    default_member_permissions = "MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS"
 )]
 pub async fn judgment_history(
     ctx: Context<'_, Data, Error>,
@@ -906,10 +906,8 @@ pub async fn judgment_history(
                     params.duration_or_default()
                 )
             }
-            EnforcementAction::Ban(params) => {
-                format!("banishment for {} seconds", params.duration_or_default())
-            }
-            EnforcementAction::Kick(..) => "exile from the realm".to_string(),
+            EnforcementAction::Ban(_params) => "Not my problem.".to_string(),
+            EnforcementAction::Kick(..) => "Get someone else to do it".to_string(),
             EnforcementAction::None => "no action".to_string(),
             EnforcementAction::VoiceChannelHaunt(..) => {
                 "haunting through the voice channels".to_string()

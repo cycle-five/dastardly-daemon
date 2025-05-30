@@ -69,7 +69,7 @@ impl From<poise::serenity_prelude::Error> for EnforcementError {
 //     }
 // }
 
-/// Convert a string into an EnforcementError
+/// Convert a string into an `EnforcementError`
 impl From<String> for EnforcementError {
     fn from(message: String) -> Self {
         Self::Other(message)

@@ -34,8 +34,9 @@ The daemon has several ways to torment misbehaving users:
 - **Voice Disconnect**: Forcibly disconnect a user from voice
 - **Voice Channel Haunting**: Teleport a user between random voice channels
 - **Server Mute**: Prevent a user from sending messages in text channels
-- **Ban**: Temporarily ban a user from the server
-- **Kick**: Remove a user from the server
+- ~~**Ban**: Temporarily ban a user from the server~~
+- ~~**Kick**: Remove a user from the server~~
+- **Ban / Kick** have been determined to be out of scope for a VC moderation daemon.
 
 ## Getting Started
 

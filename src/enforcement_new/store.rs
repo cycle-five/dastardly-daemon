@@ -94,7 +94,9 @@ impl EnforcementStore {
             .filter_map(|entry| {
                 let record = entry.value();
                 if record.state == EnforcementState::Active
-                    && record.reverse_at.is_some_and(|reverse_at| reverse_at <= now)
+                    && record
+                        .reverse_at
+                        .is_some_and(|reverse_at| reverse_at <= now)
                 {
                     Some(record.id.clone())
                 } else {
@@ -251,9 +253,11 @@ impl EnforcementStore {
     #[must_use]
     pub fn cancel_all_for_user(&self, user_id: u64, guild_id: u64) -> Vec<EnforcementRecord> {
         let mut cancelled = Vec::new();
-        
+
         // First, collect all IDs that need to be cancelled to avoid iterator invalidation
-        let ids_to_cancel: Vec<String> = self.records.iter()
+        let ids_to_cancel: Vec<String> = self
+            .records
+            .iter()
             .filter_map(|entry| {
                 let record = entry.value();
                 if record.user_id == user_id
@@ -267,7 +271,7 @@ impl EnforcementStore {
                 }
             })
             .collect();
-        
+
         // Now cancel each enforcement by ID
         for id in ids_to_cancel {
             if let Ok(record) = self.cancel_enforcement(&id) {

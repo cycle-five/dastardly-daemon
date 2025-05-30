@@ -47,6 +47,7 @@ impl Default for ActionHandlerRegistry {
 
 impl ActionHandlerRegistry {
     /// Create a new registry with all handlers registered
+    #[must_use]
     pub fn new() -> Self {
         let mut registry = Self {
             handlers: HashMap::new(),
@@ -84,13 +85,16 @@ impl ActionHandlerRegistry {
     }
 
     /// Get a handler for an action type
+    #[must_use]
     pub fn get(&self, action_type: EnforcementActionType) -> Option<&dyn ActionHandler> {
-        self.handlers
-            .get(&action_type)
-            .map(|handler| handler.as_ref())
+        self.handlers.get(&action_type).map(AsRef::as_ref)
     }
 
     /// Execute an action
+    ///
+    /// # Errors
+    ///
+    /// Returns an `EnforcementError` if no handler is registered for the action type.
     pub async fn execute(
         &self,
         http: &Http,
@@ -109,6 +113,10 @@ impl ActionHandlerRegistry {
     }
 
     /// Reverse an action
+    ///
+    /// # Errors
+    ///
+    /// Returns an `EnforcementError` if no handler is registered for the action type.
     pub async fn reverse(
         &self,
         http: &Http,
@@ -237,6 +245,12 @@ impl ActionHandler for BanHandler {
         user_id: UserId,
         action: &EnforcementAction,
     ) -> EnforcementResult<()> {
+        if matches!(action.get_type(), EnforcementActionType::Ban) {
+            return Err(EnforcementError::ValidationFailed(
+                "Ban action not supported".to_string(),
+            ));
+        }
+
         if let EnforcementAction::Ban(params) = action {
             info!(
                 "Banning user {user_id} in guild {guild_id} for {:?} seconds",
@@ -296,6 +310,11 @@ impl ActionHandler for KickHandler {
         user_id: UserId,
         action: &EnforcementAction,
     ) -> EnforcementResult<()> {
+        if matches!(action.get_type(), EnforcementActionType::Kick) {
+            return Err(EnforcementError::ValidationFailed(
+                "Kick action not supported".to_string(),
+            ));
+        }
         if let EnforcementAction::Kick(params) = action {
             info!("Kicking user {user_id} from guild {guild_id}");
 
