@@ -94,7 +94,7 @@ impl EnforcementStore {
             .filter_map(|entry| {
                 let record = entry.value();
                 if record.state == EnforcementState::Active
-                    && record.reverse_at.is_some_and(|reverse_at| reverse_at > now)
+                    && record.reverse_at.is_some_and(|reverse_at| reverse_at <= now)
                 {
                     Some(record.id.clone())
                 } else {
@@ -251,20 +251,27 @@ impl EnforcementStore {
     #[must_use]
     pub fn cancel_all_for_user(&self, user_id: u64, guild_id: u64) -> Vec<EnforcementRecord> {
         let mut cancelled = Vec::new();
-
-        for entry in self.records.iter() {
-            let record = entry.value();
-            if record.user_id == user_id
-                && record.guild_id == guild_id
-                && (record.state == EnforcementState::Pending
-                    || record.state == EnforcementState::Active)
-            {
-                let id = record.id.clone();
-                drop(entry); // Drop the immutable reference
-
-                if let Ok(record) = self.cancel_enforcement(&id) {
-                    cancelled.push(record);
+        
+        // First, collect all IDs that need to be cancelled to avoid iterator invalidation
+        let ids_to_cancel: Vec<String> = self.records.iter()
+            .filter_map(|entry| {
+                let record = entry.value();
+                if record.user_id == user_id
+                    && record.guild_id == guild_id
+                    && (record.state == EnforcementState::Pending
+                        || record.state == EnforcementState::Active)
+                {
+                    Some(record.id.clone())
+                } else {
+                    None
                 }
+            })
+            .collect();
+        
+        // Now cancel each enforcement by ID
+        for id in ids_to_cancel {
+            if let Ok(record) = self.cancel_enforcement(&id) {
+                cancelled.push(record);
             }
         }
 
@@ -471,6 +478,7 @@ mod tests {
 
     #[test]
     fn test_cancel_all_for_user() {
+        println!("Starting test_cancel_all_for_user");
         let store = EnforcementStore::new();
 
         // Add multiple records for the same user
@@ -487,9 +495,13 @@ mod tests {
 
         let id1 = record1.id.clone();
 
+        println!("Adding records: {}, {}, {}", id1, record2.id, record3.id);
+
         store.add(record1);
         store.add(record2);
         store.add(record3);
+
+        println!("Records added");
 
         // Execute one record
         let _ = store.execute_enforcement(&id1);
