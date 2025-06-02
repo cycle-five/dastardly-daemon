@@ -56,19 +56,6 @@ impl From<poise::serenity_prelude::Error> for EnforcementError {
     }
 }
 
-// impl EnforcementError {
-
-//     /// Create a validation error
-//     pub fn validation(message: impl Into<String>) -> Self {
-//         Self::ValidationFailed(message.into())
-//     }
-
-//     /// Create a guild or member not found error
-//     pub fn guild_or_member(message: impl Into<String>) -> Self {
-//         Self::GuildOrMemberNotFound(message.into())
-//     }
-// }
-
 /// Convert a string into an `EnforcementError`
 impl From<String> for EnforcementError {
     fn from(message: String) -> Self {

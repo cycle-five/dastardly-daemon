@@ -368,7 +368,7 @@ pub async fn summon_daemon(
 
     // Generate a demonic message based on the context
     let demonic_message =
-        generate_daemon_response(&warning_context.to_string(), Some(&state), response_type);
+        generate_daemon_response(&warning_context.to_string(), Some(&state), response_type).await;
 
     // Log to Discord if configured
     if let Some(log_channel_id) = guild_config.enforcement_log_channel_id {
@@ -417,12 +417,12 @@ pub async fn summon_daemon(
 /// Generate a demonic response based on the context.
 /// This should be used to create thematic messages for the daemon via
 /// the LLM integration.
-fn generate_daemon_response(
+async fn generate_daemon_response(
     warning_context: &str,
     state: Option<&UserWarningState>,
     response_type: crate::daemon_response::ResponseType,
 ) -> String {
-    crate::daemon_response::generate_daemon_response(warning_context, state, response_type)
+    crate::daemon_response::generate_daemon_response(warning_context, state, response_type).await
 }
 
 /// [DEPRECATED] Warn a user for inappropriate behavior.
@@ -652,7 +652,7 @@ pub async fn daemon_altar(
         &context,
         None,
         crate::daemon_response::ResponseType::Summoning,
-    );
+    ).await;
 
     // Save data
     if (save_data(&ctx, "setting enforcement log channel").await).is_err() {
@@ -737,7 +737,7 @@ pub async fn chaos_ritual(
         &context,
         None,
         crate::daemon_response::ResponseType::ChaosRitual,
-    );
+    ).await;
 
     // Create a more thematic message based on the chaos level
     let ritual_status = if factor < 0.2 {
@@ -853,7 +853,7 @@ pub async fn judgment_history(
     };
 
     let demonic_message =
-        generate_daemon_response(&warn_context.to_string(), Some(&state), response_type);
+        generate_daemon_response(&warn_context.to_string(), Some(&state), response_type).await;
 
     // Create thematic header based on warning score
     let header = if score > WARNING_THRESHOLD {
@@ -1039,7 +1039,7 @@ pub async fn appease(
         &context,
         Some(&user_state),
         crate::daemon_response::ResponseType::Appeasement,
-    );
+    ).await;
 
     if canceled {
         // Check if any of the canceled enforcements involved voice

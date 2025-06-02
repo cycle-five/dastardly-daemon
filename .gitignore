@@ -4,3 +4,7 @@
 /data
 discord_token.txt
 package-lock.json
+
+# Coverage files
+lcov.info
+/target/llvm-cov

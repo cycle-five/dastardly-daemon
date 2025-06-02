@@ -3,13 +3,20 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Build & Test Commands
-- Build: `cargo build`
+- Build: `cargo build` or `make build`
 - Run: `cargo run`
-- Test all: `cargo test`
+- Test all: `cargo test` or `make test`
 - Test specific: `cargo test <test_name>`
 - Example: `cargo test test_data_new`
-- Lint: `cargo clippy -- -D clippy::all -D warnings -W clippy::pedantic`
-- Format: `cargo fmt`
+- Lint: `cargo clippy -- -D clippy::all -D warnings -W clippy::pedantic` or `make lint`
+- Format: `cargo fmt` or `make format`
+
+## Code Coverage Commands
+- Coverage report (terminal): `cargo llvm-cov --all-features --workspace` or `make coverage`
+- Coverage report (HTML): `cargo llvm-cov --all-features --workspace --html` or `make coverage-html`
+- Coverage report (HTML + open): `make coverage-open`
+- Coverage report (LCOV format): `cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info` or `make coverage-lcov`
+- Clean coverage data: `make clean`
 
 ## Code Style Guidelines
 - Rust Edition: 2024

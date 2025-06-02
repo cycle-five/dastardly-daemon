@@ -1,5 +1,7 @@
 # Dastardly Daemon
 
+[![codecov](https://codecov.io/gh/cycle-five/dastardly-daemon/branch/master/graph/badge.svg)](https://codecov.io/gh/cycle-fove/dastardly-daemon)
+
 A Discord moderation bot with a twist - an unpredictable daemon that moderates voice channels according to its own chaotic whims.
 
 ## Overview
@@ -57,3 +59,48 @@ The daemon is:
 ## LLM Integration
 
 Optionally, the daemon can be connected to an LLM to generate more creative and dynamic responses to situations. This is controlled by the `llm` feature flag.
+
+## Development
+
+### Prerequisites
+
+- Rust (latest stable)
+- cargo-llvm-cov for code coverage: `cargo install cargo-llvm-cov`
+
+### Building and Testing
+
+```bash
+# Build the project
+make build
+
+# Run tests
+make test
+
+# Run linter
+make lint
+
+# Format code
+make format
+```
+
+### Code Coverage
+
+The project uses `cargo-llvm-cov` for code coverage analysis. Coverage reports are automatically generated in CI and uploaded to Codecov.
+
+To run coverage locally:
+
+```bash
+# Generate coverage report in terminal
+make coverage
+
+# Generate HTML coverage report
+make coverage-html
+
+# Generate and open HTML coverage report in browser
+make coverage-open
+
+# Generate LCOV format report (for CI/external tools)
+make coverage-lcov
+```
+
+The HTML coverage report will be generated in `target/llvm-cov/html/index.html`.
