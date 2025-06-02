@@ -192,9 +192,9 @@ impl EnforcementAction {
     }
 
     /// Check if this action is immediate (should be executed right away)
+    #[must_use]
     pub fn is_immediate(&self) -> bool {
         match self {
-            Self::None => true, // Nothing to delay
             Self::Kick(params) | Self::VoiceDisconnect(params) => {
                 // These are immediate if delay is 0 or not set
                 !params.has_duration() || params.duration_or_default() == 0
@@ -203,8 +203,8 @@ impl EnforcementAction {
                 // Haunting is immediate if interval is 0 or not set
                 params.interval.is_none() || params.interval.unwrap() == 0
             }
-            // Other actions are always immediate
-            Self::Mute(_) | Self::Ban(_) | Self::VoiceMute(_) | Self::VoiceDeafen(_) => true,
+            // Nothing to delay and all other actions are always immediate.
+            Self::Mute(_) | Self::Ban(_) | Self::VoiceMute(_) | Self::VoiceDeafen(_) | Self::None => true,
         }
     }
 
@@ -213,27 +213,27 @@ impl EnforcementAction {
         Self::Mute(ActionParams::new(duration.into()))
     }
 
-    /// Create a new Ban action
+    /// Create a new `Ban` action
     pub fn ban(duration: impl Into<Option<u32>>) -> Self {
         Self::Ban(ActionParams::new(duration.into()))
     }
 
-    /// Create a new Kick action
+    /// Create a new `Kick` action
     pub fn kick(delay: impl Into<Option<u32>>) -> Self {
         Self::Kick(ActionParams::new(delay.into()))
     }
 
-    /// Create a new VoiceMute action
+    /// Create a new `VoiceMute` action
     pub fn voice_mute(duration: impl Into<Option<u32>>) -> Self {
         Self::VoiceMute(ActionParams::new(duration.into()))
     }
 
-    /// Create a new VoiceDeafen action
+    /// Create a new `VoiceDeafen` action
     pub fn voice_deafen(duration: impl Into<Option<u32>>) -> Self {
         Self::VoiceDeafen(ActionParams::new(duration.into()))
     }
 
-    /// Create a new VoiceDisconnect action
+    /// Create a new `VoiceDisconnect` action
     pub fn voice_disconnect(delay: impl Into<Option<u32>>) -> Self {
         Self::VoiceDisconnect(ActionParams::new(delay.into()))
     }

@@ -59,8 +59,9 @@ pub enum ResponseType {
 /// # Returns
 ///
 /// A string containing the generated response
+#[allow(clippy::unused_async)]
 #[cfg(not(feature = "llm"))]
-pub fn generate_daemon_response(
+pub async fn generate_daemon_response(
     _warning_context: &str,
     user_history: Option<&UserWarningState>,
     response_type: ResponseType,
