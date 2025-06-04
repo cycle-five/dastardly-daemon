@@ -33,11 +33,10 @@ async fn async_main() -> Result<(), Error> {
     // Load environment variables
     let token = env::var("DISCORD_TOKEN").unwrap_or_else(|_| {
         env::var("DISCORD_TOKEN_FILE")
-            .map(|file| {
+            .map_or_else(|_| panic!("DISCORD_TOKEN or DISCORD_TOKEN_FILE not set"), |file| {
                 let contents = std::fs::read_to_string(file).expect("Failed to read token file");
                 contents.trim().to_string()
             })
-            .unwrap_or_else(|_| panic!("DISCORD_TOKEN or DISCORD_TOKEN_FILE not set"))
     });
 
     // Load the bot's data from file

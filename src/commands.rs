@@ -793,6 +793,7 @@ pub async fn chaos_ritual(
     required_bot_permissions = "MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS",
     default_member_permissions = "MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS"
 )]
+#[allow(clippy::too_many_lines)] // FIXME
 pub async fn judgment_history(
     ctx: Context<'_, Data, Error>,
     #[description = "User to check"] user: User,
