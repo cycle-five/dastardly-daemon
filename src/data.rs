@@ -377,6 +377,7 @@ impl Data {
         let mut unique_mods: HashSet<u64> = std::collections::HashSet::new();
 
         // Calculate score for each warning based on recency
+        #[allow(clippy::cast_precision_loss)]
         for (i, timestamp) in state.warning_timestamps.iter().enumerate() {
             let age_hours = (now - timestamp.with_timezone(&Utc)).num_seconds() as f64 / 3600.0;
             let weight = (-DECAY_RATE * age_hours).exp(); // Exponential decay based on age

@@ -47,6 +47,10 @@ impl Default for ActionHandlerRegistry {
 
 impl ActionHandlerRegistry {
     /// Create a new registry with all handlers registered
+    ///
+    /// # Panics
+    ///
+    /// This function does not panic.
     #[must_use]
     pub fn new() -> Self {
         let mut registry = Self {
@@ -76,6 +80,10 @@ impl ActionHandlerRegistry {
     }
 
     /// Register a handler for an action type
+    ///
+    /// # Panics
+    ///
+    /// This function does not panic.
     pub fn register(
         &mut self,
         action_type: EnforcementActionType,
@@ -85,6 +93,10 @@ impl ActionHandlerRegistry {
     }
 
     /// Get a handler for an action type
+    ///
+    /// # Panics
+    ///
+    /// This function does not panic.
     #[must_use]
     pub fn get(&self, action_type: EnforcementActionType) -> Option<&dyn ActionHandler> {
         self.handlers.get(&action_type).map(AsRef::as_ref)
@@ -136,6 +148,12 @@ impl ActionHandlerRegistry {
 }
 
 /// Helper function to get guild and member
+///
+/// # Errors
+///
+/// Returns `EnforcementError::GuildOrMemberNotFound` if:
+/// - The guild cannot be fetched from Discord
+/// - The member cannot be found in the guild
 pub async fn get_guild_and_member(
     http: &Http,
     guild_id: GuildId,
@@ -607,6 +625,12 @@ impl ActionHandler for VoiceChannelHauntHandler {
 }
 
 /// Get the current voice channel for a user
+///
+/// # Errors
+///
+/// Returns `EnforcementError::NotInVoiceChannel` if the user is not in any voice channel.
+/// Returns `EnforcementError::GuildOrMemberNotFound` if the guild cannot be fetched.
+/// Returns `EnforcementError::ValidationFailed` if a guild channel cannot be accessed.
 async fn get_user_voice_channel(
     http: &Http,
     guild_id: GuildId,
@@ -648,6 +672,10 @@ async fn get_user_voice_channel(
 }
 
 /// Get all voice channels in a guild
+///
+/// # Errors
+///
+/// Returns `EnforcementError` if the channels cannot be fetched from Discord.
 async fn get_guild_voice_channels(
     http: &Http,
     guild: &serenity::all::PartialGuild,
@@ -669,6 +697,10 @@ async fn get_guild_voice_channels(
 }
 
 /// Select a random voice channel, optionally ensuring it's different from the current one
+///
+/// # Panics
+///
+/// This function panics if `voice_channels` is empty.
 fn select_random_voice_channel(
     voice_channels: &[ChannelId],
     must_be_different: bool,

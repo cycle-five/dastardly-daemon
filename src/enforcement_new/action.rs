@@ -81,7 +81,7 @@ impl ActionParams {
     }
 }
 
-/// Parameters specific to the VoiceChannelHaunt action
+/// Parameters specific to the `VoiceChannelHaunt` action
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct HauntParams {
     /// Number of times to teleport the user between channels
@@ -165,6 +165,7 @@ impl Default for EnforcementAction {
 
 impl EnforcementAction {
     /// Get the type of this action
+    #[must_use]
     pub fn get_type(&self) -> EnforcementActionType {
         match self {
             Self::None => EnforcementActionType::None,
@@ -179,15 +180,15 @@ impl EnforcementAction {
     }
 
     /// Check if this action needs reversal
+    #[must_use]
     pub fn needs_reversal(&self) -> bool {
         match self {
-            Self::None => false,
             Self::Mute(params)
             | Self::Ban(params)
             | Self::VoiceMute(params)
             | Self::VoiceDeafen(params) => params.has_duration(),
             // These don't need reversal
-            Self::Kick(_) | Self::VoiceDisconnect(_) | Self::VoiceChannelHaunt(_) => false,
+            Self::Kick(_) | Self::VoiceDisconnect(_) | Self::VoiceChannelHaunt(_) | Self::None => false,
         }
     }
 
@@ -201,7 +202,7 @@ impl EnforcementAction {
             }
             Self::VoiceChannelHaunt(params) => {
                 // Haunting is immediate if interval is 0 or not set
-                params.interval.is_none() || params.interval.unwrap() == 0
+                params.interval.is_none() || params.interval.is_some_and(|v| v == 0)
             }
             // Nothing to delay and all other actions are always immediate.
             Self::Mute(_) | Self::Ban(_) | Self::VoiceMute(_) | Self::VoiceDeafen(_) | Self::None => true,

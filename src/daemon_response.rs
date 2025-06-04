@@ -72,8 +72,7 @@ pub async fn generate_daemon_response(
     // If we have user history and they have multiple warnings, reflect that in the response
 
     let repeat_offender = user_history
-        .map(|state| state.warning_timestamps.len() > 2)
-        .unwrap_or(false);
+        .is_some_and(|state| state.warning_timestamps.len() > 2);
 
     match response_type {
         ResponseType::Warning => {

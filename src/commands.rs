@@ -4,7 +4,6 @@ use crate::{
     data_ext::DataEnforcementExt,
     status::format_complete_status,
 };
-type Error = Box<dyn std::error::Error + Send + Sync>;
 use ::serenity::all::CacheHttp;
 use chrono::{DateTime, Duration, Utc};
 use poise::samples::paginate;
@@ -13,9 +12,13 @@ use poise::serenity_prelude::{Colour, CreateEmbed, CreateMessage, Mentionable, T
 use poise::{Context, command};
 use tracing::{error, info, warn};
 use uuid::Uuid;
+use std::fmt::Write as _;
+
 // Determine if enforcement should be triggered
 // Threshold is 2.0 (roughly 2 recent warnings)
 const WARNING_THRESHOLD: f64 = 2.0;
+
+type Error = Box<dyn std::error::Error + Send + Sync>;
 
 /// Basic ping command
 /// This command is used to check if the bot is responsive.
@@ -379,7 +382,7 @@ pub async fn summon_daemon(
             &reason,
             &infraction_type,
             &state,
-            &enforcement_action,
+            enforcement_action.as_ref(),
             enforce,
             &demonic_message,
         )
@@ -914,9 +917,10 @@ pub async fn judgment_history(
             }
         };
 
-        content.push_str(&format!(
+        writeln!(
+            content,
             "\n**PENDING JUDGMENT**: Should the mortal's score exceed {WARNING_THRESHOLD:.1}, their fate shall be: **{action_desc}**\n",
-        ));
+        ).unwrap();
     }
 
     // Add recent warnings
@@ -931,29 +935,28 @@ pub async fn judgment_history(
                 .http()
                 .get_user(warning.issuer_id.into())
                 .await
-                .map(|u| u.name.clone())
-                .unwrap_or_else(|_| "Unknown Moderator".to_string());
+                .map_or_else(|_| "Unknown Moderator".to_string(), |u| u.name.clone());
 
-            content.push_str(&format!(
-                "{}. **{}**: {} (Reported by {})\n",
+            let _ = writeln!(content,
+                "{}. **{}**: {} (Reported by {})",
                 i + 1,
                 timestamp,
                 warning.reason,
                 issuer
-            ));
+            );
         }
 
         if warnings.len() > 10 {
-            content.push_str(&format!(
-                "\n{} additional transgressions remain sealed in the ancient scrolls...\n",
+            let _ = writeln!(content, 
+                "\n{} additional transgressions remain sealed in the ancient scrolls...",
                 warnings.len() - 10
-            ));
+            );
         }
     }
 
     // Add a thematic closing
     if has_voice_infractions {
-        content.push_str("\n*The daemon remembers all voices that have disturbed its realm...*");
+        let _ = write!(content, "\n*The daemon remembers all voices that have disturbed its realm...*");
     } else {
         content.push_str("\n*The daemon's all-seeing eye continues to watch...*");
     }
@@ -1121,7 +1124,7 @@ pub async fn daemon_status(ctx: Context<'_, Data, Error>) -> Result<(), Error> {
 
     let slice = chunks
         .iter()
-        .map(|chunk| chunk.as_str())
+        .map(String::as_str)
         .collect::<Vec<_>>();
 
     let () = paginate(ctx, slice.as_slice()).await?;
@@ -1137,7 +1140,7 @@ async fn log_daemon_warning(
     reason: &str,
     infraction_type: &str,
     state: &crate::data::UserWarningState,
-    enforcement_action: &Option<EnforcementAction>,
+    enforcement_action: Option<&EnforcementAction>,
     enforce: bool,
     demonic_message: &str,
 ) {
@@ -1238,19 +1241,20 @@ async fn log_daemon_warning(
 
 /// Calculates the execution time for an enforcement action
 #[allow(unused)]
+#[must_use]
 pub fn calculate_execute_at(action: &EnforcementAction) -> chrono::DateTime<Utc> {
     match action {
         EnforcementAction::Ban(params)
         | EnforcementAction::Mute(params)
         | EnforcementAction::VoiceMute(params)
-        | EnforcementAction::VoiceDeafen(params) => {
-            Utc::now() + Duration::seconds(params.duration_or_default() as i64)
-        }
-        EnforcementAction::Kick(params) | EnforcementAction::VoiceDisconnect(params) => {
-            Utc::now() + Duration::seconds(params.duration_or_default() as i64)
-        }
+        | EnforcementAction::VoiceDeafen(params)
+        | EnforcementAction::Kick(params)
+        | EnforcementAction::VoiceDisconnect(params)
+         => {
+            Utc::now() + Duration::seconds(i64::from(params.duration_or_default()))
+        },
         EnforcementAction::VoiceChannelHaunt(params) => {
-            Utc::now() + Duration::seconds(params.interval_or_default() as i64)
+            Utc::now() + Duration::seconds(i64::from(params.interval_or_default()))
         }
         EnforcementAction::None => Utc::now(),
     }

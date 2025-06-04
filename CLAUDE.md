@@ -31,3 +31,5 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Use `dashmap` for thread-safe concurrent access
 - Async/await for non-blocking operations with tokio
 - Use Arc<T> for shared ownership rather than Rc<T>
+- String appending: Prefer `write!()` macro over `push_str()` when appending string literals to avoid unnecessary allocations
+- Prefer `map_or_else` over `map(...).unwrap_or_else(...)`
