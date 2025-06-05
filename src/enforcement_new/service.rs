@@ -47,6 +47,12 @@ impl EnforcementService {
         self.tx = Arc::new(Some(tx));
     }
 
+    /// Get the enforcement request sender
+    #[must_use]
+    pub fn get_sender(&self) -> Option<Sender<EnforcementCheckRequest>> {
+        self.tx.as_ref().clone()
+    }
+
     /// Create a new enforcement channel and return the sender
     #[must_use]
     pub fn create_enforcement_channel() -> Sender<EnforcementCheckRequest> {
@@ -463,7 +469,9 @@ impl EnforcementService {
 
         // Create enforcement channel
         let tx = Self::create_enforcement_channel();
-        self.set_sender(tx);
+        self.set_sender(tx.clone());
+        
+        info!("Enforcement service sender has been set");
 
         // Start the enforcement task
         if let Some(rx) = Self::take_enforcement_receiver() {
