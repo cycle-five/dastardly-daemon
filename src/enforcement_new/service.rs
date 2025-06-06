@@ -470,7 +470,7 @@ impl EnforcementService {
         // Create enforcement channel
         let tx = Self::create_enforcement_channel();
         self.set_sender(tx.clone());
-        
+
         info!("Enforcement service sender has been set");
 
         // Start the enforcement task

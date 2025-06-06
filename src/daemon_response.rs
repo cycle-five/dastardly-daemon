@@ -66,13 +66,9 @@ pub async fn generate_daemon_response(
     user_history: Option<&UserWarningState>,
     response_type: ResponseType,
 ) -> String {
-    // In a real implementation, this would call the LLM API
-    // But for now we'll just return static responses
-
     // If we have user history and they have multiple warnings, reflect that in the response
 
-    let repeat_offender = user_history
-        .is_some_and(|state| state.warning_timestamps.len() > 2);
+    let repeat_offender = user_history.is_some_and(|state| state.warning_timestamps.len() > 2);
 
     match response_type {
         ResponseType::Warning => {

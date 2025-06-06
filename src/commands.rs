@@ -10,9 +10,9 @@ use poise::samples::paginate;
 use poise::serenity_prelude as serenity;
 use poise::serenity_prelude::{Colour, CreateEmbed, CreateMessage, Mentionable, Timestamp, User};
 use poise::{Context, command};
+use std::fmt::Write as _;
 use tracing::{error, info, warn};
 use uuid::Uuid;
-use std::fmt::Write as _;
 
 // Determine if enforcement should be triggered
 // Threshold is 2.0 (roughly 2 recent warnings)
@@ -655,7 +655,8 @@ pub async fn daemon_altar(
         &context,
         None,
         crate::daemon_response::ResponseType::Summoning,
-    ).await;
+    )
+    .await;
 
     // Save data
     if (save_data(&ctx, "setting enforcement log channel").await).is_err() {
@@ -706,6 +707,7 @@ pub async fn chaos_ritual(
     let guild_id = ctx
         .guild_id()
         .ok_or("This command must be used in a guild")?;
+    ctx.defer().await?;
 
     if !(0.0..=1.0).contains(&factor) {
         ctx.say("Chaos factor must be between 0.0 and 1.0").await?;
@@ -740,7 +742,8 @@ pub async fn chaos_ritual(
         &context,
         None,
         crate::daemon_response::ResponseType::ChaosRitual,
-    ).await;
+    )
+    .await;
 
     // Create a more thematic message based on the chaos level
     let ritual_status = if factor < 0.2 {
@@ -938,7 +941,8 @@ pub async fn judgment_history(
                 .await
                 .map_or_else(|_| "Unknown Moderator".to_string(), |u| u.name.clone());
 
-            let _ = writeln!(content,
+            let _ = writeln!(
+                content,
                 "{}. **{}**: {} (Reported by {})",
                 i + 1,
                 timestamp,
@@ -948,7 +952,8 @@ pub async fn judgment_history(
         }
 
         if warnings.len() > 10 {
-            let _ = writeln!(content, 
+            let _ = writeln!(
+                content,
                 "\n{} additional transgressions remain sealed in the ancient scrolls...",
                 warnings.len() - 10
             );
@@ -957,7 +962,10 @@ pub async fn judgment_history(
 
     // Add a thematic closing
     if has_voice_infractions {
-        let _ = write!(content, "\n*The daemon remembers all voices that have disturbed its realm...*");
+        let _ = write!(
+            content,
+            "\n*The daemon remembers all voices that have disturbed its realm...*"
+        );
     } else {
         content.push_str("\n*The daemon's all-seeing eye continues to watch...*");
     }
@@ -1043,7 +1051,8 @@ pub async fn appease(
         &context,
         Some(&user_state),
         crate::daemon_response::ResponseType::Appeasement,
-    ).await;
+    )
+    .await;
 
     if canceled {
         // Check if any of the canceled enforcements involved voice
@@ -1123,10 +1132,7 @@ pub async fn daemon_status(ctx: Context<'_, Data, Error>) -> Result<(), Error> {
         chunks.push(current_chunk);
     }
 
-    let slice = chunks
-        .iter()
-        .map(String::as_str)
-        .collect::<Vec<_>>();
+    let slice = chunks.iter().map(String::as_str).collect::<Vec<_>>();
 
     let () = paginate(ctx, slice.as_slice()).await?;
     Ok(())
@@ -1250,10 +1256,9 @@ pub fn calculate_execute_at(action: &EnforcementAction) -> chrono::DateTime<Utc>
         | EnforcementAction::VoiceMute(params)
         | EnforcementAction::VoiceDeafen(params)
         | EnforcementAction::Kick(params)
-        | EnforcementAction::VoiceDisconnect(params)
-         => {
+        | EnforcementAction::VoiceDisconnect(params) => {
             Utc::now() + Duration::seconds(i64::from(params.duration_or_default()))
-        },
+        }
         EnforcementAction::VoiceChannelHaunt(params) => {
             Utc::now() + Duration::seconds(i64::from(params.interval_or_default()))
         }

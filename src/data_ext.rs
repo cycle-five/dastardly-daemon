@@ -212,7 +212,7 @@ impl DataEnforcementExt for Data {
         // We check if the service is initialized above so this is safe.
         if let Some(service) = self.enforcement_service.as_mut() {
             service.import_and_start(&data_clone, http, check_interval_seconds);
-            
+
             // Also need to set the enforcement_tx on Data for backward compatibility
             // Get the sender from the service after it's been initialized
             if let Some(sender) = service.get_sender() {

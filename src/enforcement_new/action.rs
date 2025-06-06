@@ -188,7 +188,9 @@ impl EnforcementAction {
             | Self::VoiceMute(params)
             | Self::VoiceDeafen(params) => params.has_duration(),
             // These don't need reversal
-            Self::Kick(_) | Self::VoiceDisconnect(_) | Self::VoiceChannelHaunt(_) | Self::None => false,
+            Self::Kick(_) | Self::VoiceDisconnect(_) | Self::VoiceChannelHaunt(_) | Self::None => {
+                false
+            }
         }
     }
 
@@ -205,7 +207,11 @@ impl EnforcementAction {
                 params.interval.is_none() || params.interval.is_some_and(|v| v == 0)
             }
             // Nothing to delay and all other actions are always immediate.
-            Self::Mute(_) | Self::Ban(_) | Self::VoiceMute(_) | Self::VoiceDeafen(_) | Self::None => true,
+            Self::Mute(_)
+            | Self::Ban(_)
+            | Self::VoiceMute(_)
+            | Self::VoiceDeafen(_)
+            | Self::None => true,
         }
     }
 
