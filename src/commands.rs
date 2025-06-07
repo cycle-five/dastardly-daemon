@@ -6,7 +6,7 @@ use crate::{
 };
 use ::serenity::all::CacheHttp;
 use chrono::{DateTime, Duration, Utc};
-use poise::samples::paginate;
+//use poise::samples::paginate;
 use poise::serenity_prelude as serenity;
 use poise::serenity_prelude::{Colour, CreateEmbed, CreateMessage, Mentionable, Timestamp, User};
 use poise::{Context, command};
@@ -1099,42 +1099,30 @@ pub async fn appease(
     required_permissions = "ADMINISTRATOR"
 )]
 pub async fn daemon_status(ctx: Context<'_, Data, Error>) -> Result<(), Error> {
+
+    info!("Fetching daemon status...");
+
     ctx.defer().await?;
+
+    info!("Getting current daemon status...");
 
     // Update the status tracker with latest data
     ctx.data().status.write().await.update_from_data(ctx.data());
 
+    info!("Current daemon status updated...");
+
     let status = ctx.data().status.read().await.clone();
+    info!("Current daemon status: {:?}", status); 
 
     let cache_http = (&ctx.data().get_cache(), ctx.http());
     // Generate complete status report
     let status_text = format_complete_status(&status, ctx.data(), &cache_http).await;
 
-    // Split into smaller chunks
-    let mut chunks = Vec::new();
-    let mut current_chunk = String::new();
+    info!("Daemon status report: {}", status_text);
 
-    for line in status_text.lines() {
-        if current_chunk.len() + line.len() + 1 > 1900 {
-            // This line would make the chunk too big, start a new one
-            chunks.push(current_chunk);
-            current_chunk = line.to_string();
-        } else {
-            if !current_chunk.is_empty() {
-                current_chunk.push('\n');
-            }
-            current_chunk.push_str(line);
-        }
-    }
+    ctx.say(status_text).await?;
 
-    // Add the last chunk if non-empty
-    if !current_chunk.is_empty() {
-        chunks.push(current_chunk);
-    }
-
-    let slice = chunks.iter().map(String::as_str).collect::<Vec<_>>();
-
-    let () = paginate(ctx, slice.as_slice()).await?;
+    // let () = paginate(ctx, slice.as_slice()).await?;
     Ok(())
 }
 

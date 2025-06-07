@@ -114,7 +114,8 @@ impl BotStatus {
         self.last_status_check = now;
 
         // First pass: Update user warning and enforcement status
-        for user_entry in &self.users_in_voice {
+        let mut users_in_voice = self.users_in_voice.iter().clone();
+        for user_entry in &mut users_in_voice {
             let key = *user_entry.key();
             let (user_id, guild_id) = key;
             // let guild_id = user_entry.value().guild_id;
@@ -148,7 +149,8 @@ impl BotStatus {
         }
 
         // Second pass: Update channel statistics based on user status
-        for channel_entry in &self.active_voice_channels {
+        let mut active_voice_channels = self.active_voice_channels.iter().clone();
+        for channel_entry in &mut active_voice_channels {
             let channel_id = *channel_entry.key();
             let guild_id = channel_entry.value().guild_id;
             let mut warned_count = 0;
