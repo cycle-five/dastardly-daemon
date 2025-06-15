@@ -1096,7 +1096,7 @@ pub async fn appease(
     slash_command,
     guild_only,
     ephemeral,
-    required_permissions = "ADMINISTRATOR"
+    required_permissions = "ADMINISTRATOR|VIEW_CHANNEL",
 )]
 pub async fn daemon_status(ctx: Context<'_, Data, Error>) -> Result<(), Error> {
 
