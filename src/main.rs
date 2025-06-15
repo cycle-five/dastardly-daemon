@@ -112,6 +112,20 @@ async fn async_main() -> Result<(), Error> {
                         poise::FrameworkError::EventHandler { error, event, .. } => {
                             error!(target: EVENT_TARGET, "Event handler error: {error} in event {event:?}");
                         },
+                        poise::FrameworkError::MissingUserPermissions { missing_permissions, ctx, .. } => {
+                            if let Err(err) = ctx.say(format!(
+                                "You are missing the following permissions: {missing_permissions:?}"
+                            )).await {
+                                error!(target: ERROR_TARGET, "Failed to send permissions error message: {err}");
+                            }
+                        },
+                        poise::FrameworkError::MissingBotPermissions { missing_permissions, ctx, .. } => {
+                            if let Err(err) = ctx.say(format!(
+                                "I am missing the following permissions: {missing_permissions:?}"
+                            )).await {
+                                error!(target: ERROR_TARGET, "Failed to send bot permissions error message: {err}");
+                            }
+                        },
                         _ => {
                             error!(target: ERROR_TARGET, "Error: {error}");
                         }

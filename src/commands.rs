@@ -285,7 +285,6 @@ fn get_moderator_response(
 #[command(
     slash_command,
     guild_only,
-    ephemeral,
     required_permissions = "KICK_MEMBERS|BAN_MEMBERS|MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS|SEND_MESSAGES",
     required_bot_permissions = "KICK_MEMBERS|BAN_MEMBERS|MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS|SEND_MESSAGES",
     default_member_permissions = "KICK_MEMBERS|BAN_MEMBERS|MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS|SEND_MESSAGES"
@@ -433,7 +432,6 @@ async fn generate_daemon_response(
 #[allow(clippy::too_many_lines)]
 #[command(
     slash_command,
-    ephemeral,
     guild_only,
     required_permissions = "KICK_MEMBERS|BAN_MEMBERS|MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS",
     required_bot_permissions = "KICK_MEMBERS|BAN_MEMBERS|MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS",
@@ -618,7 +616,6 @@ pub async fn warn(
 #[command(
     slash_command,
     guild_only,
-    ephemeral,
     required_permissions = "ADMINISTRATOR"
 )]
 pub async fn daemon_altar(
@@ -697,8 +694,9 @@ pub async fn daemon_altar(
 #[command(
     slash_command,
     guild_only,
-    ephemeral,
-    required_permissions = "ADMINISTRATOR"
+    required_permissions = "MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS|MANAGE_GUILD",
+    required_bot_permissions = "MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS|MANAGE_GUILD",
+    default_member_permissions = "MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS|MANAGE_GUILD",
 )]
 pub async fn chaos_ritual(
     ctx: Context<'_, Data, Error>,
@@ -791,7 +789,6 @@ pub async fn chaos_ritual(
 #[command(
     slash_command,
     guild_only,
-    ephemeral,
     required_permissions = "MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS",
     required_bot_permissions = "MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS",
     default_member_permissions = "MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS"
@@ -1095,8 +1092,7 @@ pub async fn appease(
 #[command(
     slash_command,
     guild_only,
-    ephemeral,
-    required_permissions = "ADMINISTRATOR|VIEW_CHANNEL",
+    required_permissions = "MUTE_MEMBERS|DEAFEN_MEMBERS|MODERATE_MEMBERS",
 )]
 pub async fn daemon_status(ctx: Context<'_, Data, Error>) -> Result<(), Error> {
 

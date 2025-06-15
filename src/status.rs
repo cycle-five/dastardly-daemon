@@ -114,9 +114,8 @@ impl BotStatus {
         self.last_status_check = now;
 
         // First pass: Update user warning and enforcement status
-        let mut users_in_voice = self.users_in_voice.iter().clone();
-        for user_entry in &mut users_in_voice {
-            let key = *user_entry.key();
+        let users_in_voice: Vec<_> = self.users_in_voice.iter().map(|entry| (*entry.key(), entry.value().clone())).collect();
+        for (key, _user_status) in users_in_voice {
             let (user_id, guild_id) = key;
             // let guild_id = user_entry.value().guild_id;
 
@@ -149,15 +148,14 @@ impl BotStatus {
         }
 
         // Second pass: Update channel statistics based on user status
-        let mut active_voice_channels = self.active_voice_channels.iter().clone();
-        for channel_entry in &mut active_voice_channels {
-            let channel_id = *channel_entry.key();
-            let guild_id = channel_entry.value().guild_id;
+        let active_voice_channels: Vec<_> = self.active_voice_channels.iter().map(|entry| (*entry.key(), entry.value().clone())).collect();
+        for (channel_id, channel_status) in active_voice_channels {
+            let guild_id = channel_status.guild_id;
             let mut warned_count = 0;
             let mut enforced_count = 0;
 
             // Count warned and enforced users in this channel
-            for user_id in &channel_entry.value().users {
+            for user_id in &channel_status.users {
                 let key = (*user_id, guild_id);
                 if let Some(user_status) = self.users_in_voice.get(&key) {
                     if user_status.has_warnings {
