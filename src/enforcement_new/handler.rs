@@ -706,15 +706,15 @@ fn select_random_voice_channel(
     must_be_different: bool,
     current_channel: ChannelId,
 ) -> ChannelId {
-    let rng = &mut rand::thread_rng();
+    let rng = &mut rand::rng();
     if !must_be_different || voice_channels.len() <= 1 {
         // If we don't need a different channel or there's only one channel, just pick randomly
-        let idx = rng.gen_range(0..voice_channels.len());
+        let idx = rng.random_range(0..voice_channels.len());
         voice_channels[idx]
     } else {
         // We need a different channel and have multiple options
         loop {
-            let idx = rng.gen_range(0..voice_channels.len());
+            let idx = rng.random_range(0..voice_channels.len());
             let channel = voice_channels[idx];
 
             if channel != current_channel {

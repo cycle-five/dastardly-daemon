@@ -10,7 +10,7 @@ llm = []
 
 [dependencies]
 dashmap = "5.5.3"
-derive_more = "2.0.1"
+derive_more = { version = "2.0.1", features = ["full"] }
 serenity = { version = "0.12.4", features = ["cache", "temp_cache", "reqwest", "serenity-voice-model", "client", "gateway", "model", "rustls_backend"] }
 poise = "0.6.1"
 tokio = { version = "1.45.0", features = ["rt-multi-thread", "fs", "signal", "macros", "test-util"] }

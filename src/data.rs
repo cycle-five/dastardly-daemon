@@ -15,7 +15,6 @@ use poise::serenity_prelude as serenity;
 use serde::{Deserialize, Serialize};
 use serenity::prelude::TypeMapKey;
 use tokio::sync::{RwLock, mpsc::Sender};
-use tracing_subscriber::field::display;
 use derive_more::Display;
 
 // Constants for the scoring algorithm

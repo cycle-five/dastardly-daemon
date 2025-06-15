@@ -122,14 +122,14 @@ fn get_enforcement_action(
         let enforcement = match infraction_type {
             "voice" => {
                 // For voice infractions, randomly select between different voice-related actions
-                let mut rng = rand::thread_rng();
-                let action_choice = rand::Rng::gen_range(&mut rng, 0..3); // 0-3 for four possible actions
+                let mut rng = rand::rng();
+                let action_choice = rand::Rng::random_range(&mut rng, 0..3); // 0-3 for four possible actions
 
                 match action_choice {
                     0 => {
-                        let teleport_count = Some(rand::Rng::gen_range(&mut rng, 1..=4));
-                        let interval = Some(rand::Rng::gen_range(&mut rng, 5..=10));
-                        let return_to_origin = Some(rand::Rng::gen_range(&mut rng, 0..=1) == 1);
+                        let teleport_count = Some(rand::Rng::random_range(&mut rng, 1..=4));
+                        let interval = Some(rand::Rng::random_range(&mut rng, 5..=10));
+                        let return_to_origin = Some(rand::Rng::random_range(&mut rng, 0..=1) == 1);
                         let original_channel_id = None; // No original channel for teleport
                         EnforcementAction::voice_channel_haunt(
                             teleport_count,   // More teleports for repeat offenders
@@ -168,8 +168,8 @@ fn get_enforcement_action(
 fn calculate_adjusted_warning_score(base_score: f64, chaos_factor: f32) -> (f64, f64) {
     // Add randomness based on the chaos factor
     let random_factor: f64 = {
-        let mut rng = rand::thread_rng();
-        rand::Rng::gen_range(&mut rng, 0.0..f64::from(chaos_factor))
+        let mut rng = rand::rng();
+        rand::Rng::random_range(&mut rng, 0.0..f64::from(chaos_factor))
     };
     let adjusted_score = base_score + random_factor;
 
@@ -462,9 +462,9 @@ pub async fn warn(
         .map(|s| s.to_lowercase())
         .unwrap_or_else(|| guild_config.default_notification_method.to_string());
     // Determine notification method
-    let notification_method = match notification.as_deref() {
-        Some("public" | "Public") => NotificationMethod::PublicWithMention,
-        Some("dm" | "DM") => NotificationMethod::DirectMessage,
+    let notification_method = match notification_normalized.as_str() {
+        "public" => NotificationMethod::PublicWithMention,
+        "dm" => NotificationMethod::DirectMessage,
         _ => guild_config.default_notification_method,
     };
 

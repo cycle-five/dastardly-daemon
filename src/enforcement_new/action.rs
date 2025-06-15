@@ -4,10 +4,11 @@
 //! to users, with a more consistent parameter structure.
 
 use serde::{Deserialize, Serialize};
-use std::fmt;
+use derive_more::Display;
 
 /// Type of enforcement action
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Display)]
+#[display("{}", self)]
 pub enum EnforcementActionType {
     /// No action (placeholder)
     None,
@@ -27,20 +28,20 @@ pub enum EnforcementActionType {
     VoiceChannelHaunt,
 }
 
-impl fmt::Display for EnforcementActionType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::None => write!(f, "None"),
-            Self::Mute => write!(f, "Mute"),
-            Self::Ban => write!(f, "Ban"),
-            Self::Kick => write!(f, "Kick"),
-            Self::VoiceMute => write!(f, "Voice Mute"),
-            Self::VoiceDeafen => write!(f, "Voice Deafen"),
-            Self::VoiceDisconnect => write!(f, "Voice Disconnect"),
-            Self::VoiceChannelHaunt => write!(f, "Voice Channel Haunt"),
-        }
-    }
-}
+// impl fmt::Display for EnforcementActionType {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         match self {
+//             Self::None => write!(f, "None"),
+//             Self::Mute => write!(f, "Mute"),
+//             Self::Ban => write!(f, "Ban"),
+//             Self::Kick => write!(f, "Kick"),
+//             Self::VoiceMute => write!(f, "Voice Mute"),
+//             Self::VoiceDeafen => write!(f, "Voice Deafen"),
+//             Self::VoiceDisconnect => write!(f, "Voice Disconnect"),
+//             Self::VoiceChannelHaunt => write!(f, "Voice Channel Haunt"),
+//         }
+//     }
+// }
 
 /// Parameters common to most enforcement actions
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
