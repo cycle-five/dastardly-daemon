@@ -10,16 +10,17 @@ llm = []
 
 [dependencies]
 dashmap = "5.5.3"
+derive_more = "2.0.1"
 serenity = { version = "0.12.4", features = ["cache", "temp_cache", "reqwest", "serenity-voice-model", "client", "gateway", "model", "rustls_backend"] }
 poise = "0.6.1"
 tokio = { version = "1.45.0", features = ["rt-multi-thread", "fs", "signal", "macros", "test-util"] }
 serde = { version = "1.0", features = ["derive"] }
-serde_yaml = "0.9.33"
-uuid = { version = "1.8.0", features = ["v4", "serde"] }
-rand = "0.8.5"
+serde_yaml = "0.9"
+uuid = { version = "1.17.0", features = ["v4", "serde"] }
+rand = "0.9"
 glob = "0.3.2"
 async-trait = "0.1.77"
-thiserror = "1.0.56"
+thiserror = "2.0"
 
 # Logging and tracing
 tracing = "0.1"

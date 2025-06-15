@@ -457,6 +457,10 @@ pub async fn warn(
     // Get guild configuration
     let guild_config = ctx.data().get_guild_config(guild_id);
 
+    let notification_normalized = notification
+        .as_deref()
+        .map(|s| s.to_lowercase())
+        .unwrap_or_else(|| guild_config.default_notification_method.to_string());
     // Determine notification method
     let notification_method = match notification.as_deref() {
         Some("public" | "Public") => NotificationMethod::PublicWithMention,
@@ -464,16 +468,28 @@ pub async fn warn(
         _ => guild_config.default_notification_method,
     };
 
+    let action_lower = action.as_deref().map(|s| s.to_lowercase());
     // Determine enforcement action
     let duration = duration_minutes.map(|d| d * 60);
-    let enforcement = match action.as_deref() {
-        Some("mute" | "Mute") => Some(EnforcementAction::mute(duration)),
-        Some("ban" | "Ban") => Some(EnforcementAction::ban(duration)),
-        Some("kick" | "Kick") => Some(EnforcementAction::kick(duration)),
-        Some("voicemute" | "VoiceMute") => Some(EnforcementAction::voice_mute(duration)),
-        Some("voicedeafen" | "VoiceDeafen") => Some(EnforcementAction::voice_deafen(duration)),
-        Some("voicedisconnect" | "VoiceDisconnect") => {
+    let enforcement = match action_lower.as_deref() {
+        Some("mute") => Some(EnforcementAction::mute(duration)),
+        Some("ban") => Some(EnforcementAction::ban(duration)),
+        Some("kick") => Some(EnforcementAction::kick(duration)),
+        Some("voicemute") => Some(EnforcementAction::voice_mute(duration)),
+        Some("voicedeafen") => Some(EnforcementAction::voice_deafen(duration)),
+        Some("voicedisconnect") => {
             Some(EnforcementAction::voice_disconnect(duration))
+        }
+        Some(|"haunt") => {
+            // For voice channel haunt, we need to set teleport count and interval
+            let teleport_count = Some(3); // Default to 3 teleports
+            let interval = Some(5); // Default to 5 seconds between teleports
+            Some(EnforcementAction::voice_channel_haunt(
+                teleport_count,
+                interval,
+                None, // No return to original channel
+                None, // No original channel ID
+            ))
         }
         _ => guild_config.default_enforcement,
     };

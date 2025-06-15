@@ -15,6 +15,8 @@ use poise::serenity_prelude as serenity;
 use serde::{Deserialize, Serialize};
 use serenity::prelude::TypeMapKey;
 use tokio::sync::{RwLock, mpsc::Sender};
+use tracing_subscriber::field::display;
+use derive_more::Display;
 
 // Constants for the scoring algorithm
 const DECAY_RATE: f64 = 0.05; // Higher values mean faster decay
@@ -66,7 +68,8 @@ impl GuildConfig {
 }
 
 /// Notification method for warnings
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, Display)]
+#[display("{}", "self")]
 pub enum NotificationMethod {
     #[default]
     DirectMessage,
